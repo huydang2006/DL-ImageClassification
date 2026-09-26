@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data - large files / sensitive (root-level only)
+/data/raw/
+/data/processed/
+
+# Trained model weights (ignore artifacts, keep folder + README)
+/models/*.h5
+/models/*.keras
+/models/*.pth
+/models/*.pt
+/models/*.ckpt
+/models/*.bin
+
+# Results - generated artifacts only
+/results/metrics/*
+/results/plots/*
+/results/reports/*
+
+# OS
+.DS_Store
+Thumbs.db

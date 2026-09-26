@@ -47,3 +47,45 @@ Dự án so sánh 3 hướng tiếp cận chính:
 - Có baseline rõ ràng từ M1.
 - Chứng minh hiệu quả tăng dần của M2 và M3.
 - Đề xuất mô hình phù hợp nhất cho bài toán nhận diện độ tươi của rau củ quả trong thực tế.
+
+---
+
+## 6. Cấu trúc dự án
+
+```
+DL-ImageClassification/
+├── data/                   # Dữ liệu (gitignore) + data/README.md
+├── notebooks/              # EDA, demo + notebooks/README.md
+├── src/                    # Code nguồn + src/README.md
+│   ├── config.py           # Hằng số, paths, tham số
+│   ├── data.py             # Dataset pipeline
+│   ├── utils.py            # Seed, plot utilities
+│   ├── train.py            # Entry point huấn luyện
+│   ├── evaluate.py         # Entry point đánh giá
+│   └── models/             # M1/M2/M3 + models/README.md
+├── models/                 # Trọng số model (gitignore) + models/README.md
+├── results/                # Metrics, plots, reports + results/README.md
+└── tests/                  # Unit test + tests/README.md
+```
+
+## 7. Cài đặt
+
+```bash
+python -m venv venv
+venv\Scripts\activate      # Windows
+pip install -r requirements.txt
+```
+
+## 8. Cách dùng
+
+```bash
+# Huấn luyện
+python -m src.train --model M1        # Simple NN (baseline)
+python -m src.train --model M2        # Deep CNN
+python -m src.train --model M3        # Transfer learning
+
+# Đánh giá
+python -m src.evaluate --model M1
+```
+
+Framework: **PyTorch** + **torchvision**.
