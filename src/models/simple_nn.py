@@ -39,4 +39,4 @@ class SimpleNN(nn.Module):
         # x = x.view(x.size(0), -1)  # flatten
         # logits = self.net(x)
         # return logits
-        return NotImplemented
+        raise NotImplementedError

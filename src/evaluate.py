@@ -15,7 +15,7 @@ def evaluate(model_name):
     5. Vẽ confusion matrix, ROC curve -> lưu vào results/plots/
     6. Lưu bảng metrics -> results/metrics/<model_name>_metrics.json
     """
-    return NotImplemented
+    raise NotImplementedError
 
 
 def main():

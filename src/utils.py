@@ -20,17 +20,17 @@ def set_seed(seed=42):
     - torch.backends.cudnn.deterministic = True
     """
     # os.environ["PYTHONHASHSEED"] = str(seed)
-    return NotImplemented
+    raise NotImplementedError
 
 
 def plot_image_grid(images, labels, class_names, n_rows=4, n_cols=4):
     """Vẽ lưới ảnh dưới dạng matplotlib subplot để visualize batch dữ liệu."""
-    return NotImplemented
+    raise NotImplementedError
 
 
 def save_metrics(metrics: dict, filepath: str):
     """Lưu dict metrics ra file JSON."""
-    return NotImplemented
+    raise NotImplementedError
 
 
 def save_model(model: torch.nn.Module, filepath: str):
@@ -38,7 +38,7 @@ def save_model(model: torch.nn.Module, filepath: str):
     Lưu state_dict của model.
     TODO: torch.save(model.state_dict(), filepath)
     """
-    return NotImplemented
+    raise NotImplementedError
 
 
 def load_model(model_class, filepath: str, device="cpu"):
@@ -46,4 +46,4 @@ def load_model(model_class, filepath: str, device="cpu"):
     Load weights vào một model instance.
     TODO: model = model_class(); model.load_state_dict(torch.load(filepath, map_location=device))
     """
-    return NotImplemented
+    raise NotImplementedError

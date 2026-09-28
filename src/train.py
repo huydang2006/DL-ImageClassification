@@ -61,7 +61,7 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float):
          - log metrics, lưu best model -> models/<model_name>.pth
     7. lưu metrics -> results/metrics/<model_name>_metrics.json
     """
-    return NotImplemented
+    raise NotImplementedError
 
 
 def main():

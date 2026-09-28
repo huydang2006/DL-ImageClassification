@@ -16,4 +16,4 @@ from src.models import SimpleNN, DeepCNN, TransferModel
 model = TransferModel(num_classes=28)
 ```
 
-Mỗi mô hình được thiết kế để trả về một `tf.keras.Model` chuẩn.
+Mỗi mô hình được thiết kế để trả về một `torch.nn.Module` chuẩn.

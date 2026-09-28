@@ -17,7 +17,8 @@ RESULTS_DIR = os.path.join(BASE_DIR, "results")
 # Tham số dữ liệu
 # ---------------------------------------------------------------------------
 NUM_CLASSES = 28          # 14 loại rau/củ × 2 trạng thái (Healthy/Rotten)
-IMG_SIZE_M1 = 128         # kích thước ảnh dùng cho M1 & M2
+IMG_SIZE_M1 = 128         # kích thước ảnh dùng cho M1 (Simple NN)
+IMG_SIZE_M2 = 128         # kích thước ảnh dùng cho M2 (Deep CNN)
 IMG_SIZE_M3 = 224         # kích thước ảnh dùng cho M3 (transfer learning)
 BATCH_SIZE = 32
 SEED = 42

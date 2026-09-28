@@ -46,7 +46,7 @@ class TransferModel(nn.Module):
         # x = self.backbone(x)
         # logits = self.classifier(x)
         # return logits
-        return NotImplemented
+        raise NotImplementedError
 
 
 def unfreeze_backbone(model: TransferModel, unfreeze_from: int = 100):
@@ -57,4 +57,4 @@ def unfreeze_backbone(model: TransferModel, unfreeze_from: int = 100):
     - for param in model.parameters(): param.requires_grad = True
     - Có thể set requires_grad=False cho các layer trước `unfreeze_from`
     """
-    return NotImplemented
+    raise NotImplementedError

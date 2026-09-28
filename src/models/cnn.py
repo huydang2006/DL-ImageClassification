@@ -37,4 +37,4 @@ class DeepCNN(nn.Module):
         # x = self.features(x)
         # x = self.classifier(x)
         # return x
-        return NotImplemented
+        raise NotImplementedError

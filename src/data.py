@@ -33,7 +33,7 @@ def download_dataset():
     """
     # !kaggle datasets download -d muhammad0subhan/fruit-and-vegetable-disease-healthy-vs-rotten
     # unzip ... -d RAW_DATA_DIR
-    return NotImplemented
+    raise NotImplementedError
 
 
 def get_labels_mapping() -> Dict[str, int]:
@@ -45,7 +45,7 @@ def get_labels_mapping() -> Dict[str, int]:
 
     TODO: quét RAW_DATA_DIR để sinh mapping tự động.
     """
-    return NotImplemented
+    raise NotImplementedError
 
 
 def split_dataset():
@@ -53,7 +53,7 @@ def split_dataset():
     Chia dataset thành train / val / test (70/15/15) theo stratified sampling
     trên 28 lớp, lưu kết quả dưới dạng CSV vào SPLITS_DIR.
     """
-    return NotImplemented
+    raise NotImplementedError
 
 
 # ---------------------------------------------------------------------------
@@ -77,13 +77,13 @@ class FruitVegDataset(Dataset):
             transform: torchvision.transforms.Compose (nếu có).
         """
         self.transform = transform
-        return NotImplemented
+        raise NotImplementedError
 
     def __len__(self) -> int:
-        return NotImplemented
+        raise NotImplementedError
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
-        return NotImplemented
+        raise NotImplementedError
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ def build_dataloader(split_name: str, img_size: int, batch_size: int = BATCH_SIZ
     # TODO: load transform (train: augmentation + normalize; val/test: chỉ normalize)
     # dataset = FruitVegDataset(split_file, img_size, transform)
     # loader = DataLoader(dataset, batch_size=batch_size, shuffle=..., num_workers=...)
-    return NotImplemented
+    raise NotImplementedError
 
 
 def create_augmentation_pipeline(img_size: int):
@@ -116,7 +116,7 @@ def create_augmentation_pipeline(img_size: int):
 
     TODO: dùng torchvision.transforms.Compose([...])
     """
-    return NotImplemented
+    raise NotImplementedError
 
 
 def get_default_transform(img_size: int):
@@ -125,4 +125,4 @@ def get_default_transform(img_size: int):
 
     TODO: torchvision.transforms.Compose([Resize, ToTensor, Normalize])
     """
-    return NotImplemented
+    raise NotImplementedError
