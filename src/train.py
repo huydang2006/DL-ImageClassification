@@ -28,7 +28,8 @@ from src.config import (
     MODELS_DIR,
     RESULTS_DIR,
 )
-from src.data import build_dataloader, get_class_weights, split_dataset
+from src.data import build_dataloader
+from src.preprocessing import get_class_weights, prepare_dataset
 from src.utils import save_metrics, save_model
 from src.utils import set_seed
 
@@ -87,7 +88,7 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float):
 
     split_dir = Path(Path(__file__).resolve().parent.parent / "data" / "splits")
     if not all((split_dir / f"{name}.csv").is_file() for name in ("train", "val")):
-        split_dataset()
+        prepare_dataset()
 
     image_size = {
         "M1": IMG_SIZE_M1,

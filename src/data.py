@@ -1,43 +1,41 @@
-"""Pipeline dữ liệu: tải, tiền xử lý, chia tập và tạo DataLoader (PyTorch)."""
+"""Tải dữ liệu, định nghĩa Dataset và tạo DataLoader cho PyTorch."""
 
-import os
-import hashlib
 import shutil
 import subprocess
 import sys
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict
 
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
-from sklearn.model_selection import train_test_split
 from PIL import Image
-from torchvision import transforms
 
 from src.config import (
     BASE_DIR,
     RAW_DATA_DIR,
     SPLITS_DIR,
-    IMG_SIZE_M1,
-    IMG_SIZE_M3,
     BATCH_SIZE,
     NUM_CLASSES,
     SEED,
 )
 
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+from src.preprocessing import (
+    IMAGE_EXTENSIONS,
+    convert_rgb,
+    find_cross_split_duplicates as inspect_cross_split_duplicates,
+    find_dataset_root,
+    get_class_directories,
+    get_class_weights as calculate_class_weights,
+    get_evaluation_transform,
+    get_labels_mapping as build_labels_mapping,
+    get_training_transform,
+    prepare_dataset,
+)
+
 KAGGLE_DATASET = "muhammad0subhan/fruit-and-vegetable-disease-healthy-vs-rotten"
-
-
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as image_file:
-        for chunk in iter(lambda: image_file.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -45,16 +43,11 @@ def _file_sha256(path: Path) -> str:
 # ---------------------------------------------------------------------------
 def _has_complete_dataset(raw_dir: Path) -> bool:
     """Return whether raw_dir contains all expected non-empty class folders."""
-    class_dirs = [path for path in raw_dir.iterdir() if path.is_dir()] if raw_dir.is_dir() else []
-    if len(class_dirs) != NUM_CLASSES:
+    try:
+        root = find_dataset_root(raw_dir)
+    except (FileNotFoundError, ValueError):
         return False
-    return all(
-        any(
-            path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
-            for path in class_dir.rglob("*")
-        )
-        for class_dir in class_dirs
-    )
+    return len(get_class_directories(root)) == NUM_CLASSES
 
 
 def _safe_extract(zip_path: Path, destination: Path) -> None:
@@ -130,7 +123,8 @@ def download_dataset() -> str:
                 "Dataset tải về không chứa đủ 28 thư mục class có ảnh hợp lệ."
             )
 
-        for source in source_root.iterdir():
+        source_root = find_dataset_root(source_root)
+        for source in get_class_directories(source_root):
             destination = raw_dir / source.name
             if destination.exists():
                 shutil.rmtree(destination) if destination.is_dir() else destination.unlink()
@@ -148,15 +142,7 @@ def get_labels_mapping() -> Dict[str, int]:
     Dataset gồm 28 thư mục con, mỗi thư mục tương ứng 1 lớp.
     Ví dụ: {"Apple_healthy": 0, "Apple_rotten": 1, ...}
     """
-    raw_dir = Path(RAW_DATA_DIR)
-    if not raw_dir.is_dir():
-        raise FileNotFoundError(f"Không tìm thấy thư mục dữ liệu: {raw_dir}")
-
-    class_names = sorted(path.name for path in raw_dir.iterdir() if path.is_dir())
-    if not class_names:
-        raise ValueError(f"Không tìm thấy thư mục class trong: {raw_dir}")
-
-    return {class_name: index for index, class_name in enumerate(class_names)}
+    return build_labels_mapping(RAW_DATA_DIR)
 
 
 def split_dataset(
@@ -171,85 +157,9 @@ def split_dataset(
     Returns:
         Dict ánh xạ tên split ("train", "val", "test") tới đường dẫn CSV.
     """
-    if train_ratio <= 0 or val_ratio <= 0 or train_ratio + val_ratio >= 1:
-        raise ValueError("train_ratio và val_ratio phải dương, tổng phải nhỏ hơn 1.")
-
-    labels_mapping = get_labels_mapping()
-    records: List[dict] = []
-    raw_dir = Path(RAW_DATA_DIR)
-
-    for class_name, label in labels_mapping.items():
-        class_dir = raw_dir / class_name
-        image_paths = sorted(
-            path for path in class_dir.rglob("*")
-            if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
-        )
-        if not image_paths:
-            raise ValueError(f"Class không có ảnh hợp lệ: {class_name}")
-
-        records.extend(
-            {
-                "filepath": str(path.relative_to(Path(BASE_DIR))),
-                "label": label,
-                "class_name": class_name,
-                "content_hash": _file_sha256(path),
-            }
-            for path in image_paths
-        )
-
-    frame = pd.DataFrame(records)
-    if frame.empty:
-        raise ValueError("Không tìm thấy ảnh hợp lệ trong dataset.")
-
-    groups = frame.groupby("content_hash", as_index=False).agg(
-        label=("label", "first"),
+    return prepare_dataset(
+        RAW_DATA_DIR, SPLITS_DIR, train_ratio, val_ratio, seed
     )
-    conflicting_groups = frame.groupby("content_hash")["label"].nunique()
-    conflicting_hashes = set(conflicting_groups[conflicting_groups > 1].index)
-    if conflicting_hashes:
-        excluded = frame[frame["content_hash"].isin(conflicting_hashes)].drop(
-            columns=["content_hash"]
-        )
-        excluded.to_csv(
-            Path(SPLITS_DIR) / "excluded_conflicting_duplicates.csv",
-            index=False,
-        )
-        frame = frame[~frame["content_hash"].isin(conflicting_hashes)].copy()
-        groups = groups[~groups["content_hash"].isin(conflicting_hashes)].copy()
-
-    train_groups, remainder_groups = train_test_split(
-        groups,
-        test_size=1 - train_ratio,
-        stratify=groups["label"],
-        random_state=seed,
-    )
-    val_share_of_remainder = val_ratio / (1 - train_ratio)
-    val_groups, test_groups = train_test_split(
-        remainder_groups,
-        test_size=1 - val_share_of_remainder,
-        stratify=remainder_groups["label"],
-        random_state=seed,
-    )
-
-    os.makedirs(SPLITS_DIR, exist_ok=True)
-    group_splits = {
-        "train": set(train_groups["content_hash"]),
-        "val": set(val_groups["content_hash"]),
-        "test": set(test_groups["content_hash"]),
-    }
-    split_frames = {
-        split_name: frame[frame["content_hash"].isin(content_hashes)]
-        for split_name, content_hashes in group_splits.items()
-    }
-    split_paths = {}
-    for split_name, split_frame in split_frames.items():
-        split_path = Path(SPLITS_DIR) / f"{split_name}.csv"
-        split_frame.drop(columns=["content_hash"]).sort_values(
-            ["label", "filepath"]
-        ).to_csv(split_path, index=False)
-        split_paths[split_name] = str(split_path)
-
-    return split_paths
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +179,9 @@ class FruitVegDataset(Dataset):
             img_size: int, kích thước ảnh resize (128 hoặc 224).
             transform: torchvision.transforms.Compose (nếu có).
         """
-        self.transform = transform or get_default_transform(img_size)
+        self.transform = transform or get_evaluation_transform(
+            img_size, convert_color=False
+        )
         self.frame = pd.read_csv(split_file)
         required_columns = {"filepath", "label", "class_name"}
         missing_columns = required_columns.difference(self.frame.columns)
@@ -293,10 +205,7 @@ class FruitVegDataset(Dataset):
             raise FileNotFoundError(f"Không tìm thấy ảnh: {image_path}")
         try:
             with Image.open(image_path) as image:
-                if image.mode == "P" and "transparency" in image.info:
-                    image = image.convert("RGBA").convert("RGB")
-                else:
-                    image = image.convert("RGB")
+                image = convert_rgb(image)
         except (OSError, ValueError) as exc:
             raise RuntimeError(f"Không thể đọc ảnh: {image_path}") from exc
         return self.transform(image), int(row["label"])
@@ -330,9 +239,9 @@ def build_dataloader(split_name: str, img_size: int, batch_size: int = BATCH_SIZ
             f"Không tìm thấy split file: {split_file}. Hãy chạy split_dataset() trước."
         )
     transform = (
-        create_augmentation_pipeline(img_size)
+        get_training_transform(img_size, convert_color=False)
         if split_name == "train"
-        else get_default_transform(img_size)
+        else get_evaluation_transform(img_size, convert_color=False)
     )
     dataset = FruitVegDataset(str(split_file), img_size, transform=transform)
     return DataLoader(
@@ -345,87 +254,10 @@ def build_dataloader(split_name: str, img_size: int, batch_size: int = BATCH_SIZ
 
 
 def get_class_weights(split_name: str = "train") -> torch.Tensor:
-    """Return normalized inverse-frequency weights for the requested split."""
-    split_file = Path(SPLITS_DIR) / f"{split_name}.csv"
-    if not split_file.is_file():
-        raise FileNotFoundError(f"Không tìm thấy split file: {split_file}")
-    frame = pd.read_csv(split_file)
-    counts = frame["label"].value_counts().reindex(range(NUM_CLASSES), fill_value=0)
-    if (counts == 0).any():
-        raise ValueError("Split file phải chứa ít nhất một ảnh cho mỗi class.")
-    weights = len(frame) / (NUM_CLASSES * counts.astype(float))
-    return torch.tensor(weights.to_numpy(), dtype=torch.float32)
+    """Wrapper tương thích; phần tính trọng số nằm trong preprocessing."""
+    return calculate_class_weights(split_name, SPLITS_DIR)
 
 
-def find_cross_split_duplicates() -> Dict[str, List[str]]:
-    """Find byte-identical images that occur in more than one split."""
-    split_hashes: Dict[str, Dict[str, str]] = {}
-    for split_name in ("train", "val", "test"):
-        split_file = Path(SPLITS_DIR) / f"{split_name}.csv"
-        if not split_file.is_file():
-            raise FileNotFoundError(f"Không tìm thấy split file: {split_file}")
-        frame = pd.read_csv(split_file)
-        hashes = {}
-        for relative_path in frame["filepath"]:
-            image_path = Path(BASE_DIR) / Path(relative_path)
-            if not image_path.is_file():
-                raise FileNotFoundError(f"Không tìm thấy ảnh: {image_path}")
-            hashes[_file_sha256(image_path)] = str(relative_path)
-        split_hashes[split_name] = hashes
-
-    duplicates: Dict[str, List[str]] = {}
-    for split_name, hashes in split_hashes.items():
-        for digest, relative_path in hashes.items():
-            other_splits = [
-                other_name
-                for other_name, other_hashes in split_hashes.items()
-                if other_name != split_name and digest in other_hashes
-            ]
-            if other_splits:
-                locations = [f"{split_name}:{relative_path}"]
-                locations.extend(
-                    f"{other_name}:{split_hashes[other_name][digest]}"
-                    for other_name in other_splits
-                )
-                duplicates[digest] = sorted(set(locations))
-    return duplicates
-
-
-def create_augmentation_pipeline(img_size: int):
-    """
-    Tạo transform augmentation cho tập training.
-
-    Augmentations đề xuất: RandomHorizontalFlip, RandomRotation, ColorJitter,
-    RandomResizedCrop/Resize.
-
-    """
-    return transforms.Compose(
-        [
-            transforms.Resize((img_size, img_size)),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(10),
-            transforms.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                mean=(0.485, 0.456, 0.406),
-                std=(0.229, 0.224, 0.225),
-            ),
-        ]
-    )
-
-
-def get_default_transform(img_size: int):
-    """
-    Transform chuẩn cho validation/test (resize + to_tensor + normalize ImageNet stats).
-
-    """
-    return transforms.Compose(
-        [
-            transforms.Resize((img_size, img_size)),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                mean=(0.485, 0.456, 0.406),
-                std=(0.229, 0.224, 0.225),
-            ),
-        ]
-    )
+def find_cross_split_duplicates():
+    """Wrapper tương thích; phần kiểm tra leakage nằm trong preprocessing."""
+    return inspect_cross_split_duplicates(SPLITS_DIR)
