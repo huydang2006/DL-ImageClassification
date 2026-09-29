@@ -123,7 +123,7 @@ python -m src.train --model M3        # Transfer learning
 Có thể ghi đè tham số:
 
 ```bash
-python -m src.train --model M1 --epochs 10 --batch_size 32 --lr 0.001
+python -m src.train --model M1 --epochs 10 --batch_size 64 --lr 0.001
 ```
 
 ### Đánh giá

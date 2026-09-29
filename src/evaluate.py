@@ -111,7 +111,21 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate fruit and vegetable classifier")
     parser.add_argument("--model", type=str, default="M1", choices=["M1", "M2", "M3"])
     args = parser.parse_args()
-    evaluate(args.model)
+    metrics = evaluate(args.model)
+    print(f"Model: {metrics['model']}")
+    print(f"Device: {metrics['device']}")
+    print(f"Accuracy: {metrics['accuracy']:.4f}")
+    print(f"Macro precision: {metrics['macro_precision']:.4f}")
+    print(f"Macro recall: {metrics['macro_recall']:.4f}")
+    print(f"Macro F1: {metrics['macro_f1']:.4f}")
+    print(
+        "Metrics: "
+        f"{Path(RESULTS_DIR) / 'metrics' / f'{args.model}_evaluation.json'}"
+    )
+    print(
+        "Confusion matrix: "
+        f"{Path(RESULTS_DIR) / 'plots' / f'{args.model}_confusion_matrix.png'}"
+    )
 
 
 if __name__ == "__main__":
