@@ -34,4 +34,6 @@ def test_splits_are_disjoint_and_complete():
     assert not (paths[0] & paths[1])
     assert not (paths[0] & paths[2])
     assert not (paths[1] & paths[2])
-    assert sum(len(items) for items in paths) == 29291
+    excluded_path = Path("data/splits/excluded_conflicting_duplicates.csv")
+    excluded_count = len(pd.read_csv(excluded_path)) if excluded_path.is_file() else 0
+    assert sum(len(items) for items in paths) + excluded_count == 29291

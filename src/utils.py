@@ -15,12 +15,7 @@ def set_seed(seed=42):
     """
     Cố định seed cho random, numpy, pytorch để kết quả tái lắp được.
 
-    TODO:
-    - random.seed(seed)
-    - np.random.seed(seed)
-    - torch.manual_seed(seed)
-    - torch.cuda.manual_seed_all(seed)
-    - torch.backends.cudnn.deterministic = True
+    Seeds Python, NumPy and PyTorch and enables deterministic cuDNN behavior.
     """
     os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)
@@ -62,7 +57,7 @@ def save_metrics(metrics: dict, filepath: str):
 def save_model(model: torch.nn.Module, filepath: str):
     """
     Lưu state_dict của model.
-    TODO: torch.save(model.state_dict(), filepath)
+    Save the model state dictionary to a checkpoint file.
     """
     output_path = Path(filepath)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -72,7 +67,7 @@ def save_model(model: torch.nn.Module, filepath: str):
 def load_model(model_class, filepath: str, device="cpu"):
     """
     Load weights vào một model instance.
-    TODO: model = model_class(); model.load_state_dict(torch.load(filepath, map_location=device))
+    Load a state dictionary into a newly constructed model instance.
     """
     model = model_class()
     state_dict = torch.load(filepath, map_location=device)

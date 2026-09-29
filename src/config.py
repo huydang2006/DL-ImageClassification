@@ -28,3 +28,7 @@ SEED = 42
 # ---------------------------------------------------------------------------
 LEARNING_RATE = 1e-3       # placeholder — sẽ cấu hình chi tiết trong lúc train
 EPOCHS = 10             # placeholder
+M3_FREEZE_EPOCHS = 5
+M3_FINETUNE_EPOCHS = 5
+LR_SCHEDULER_PATIENCE = 3
+EARLY_STOPPING_PATIENCE = 5

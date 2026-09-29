@@ -1,6 +1,7 @@
 """Pipeline dữ liệu: tải, tiền xử lý, chia tập và tạo DataLoader (PyTorch)."""
 
 import os
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -31,8 +32,16 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 KAGGLE_DATASET = "muhammad0subhan/fruit-and-vegetable-disease-healthy-vs-rotten"
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as image_file:
+        for chunk in iter(lambda: image_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 # ---------------------------------------------------------------------------
-# Hàm placeholder
+# Dataset download and split helpers
 # ---------------------------------------------------------------------------
 def _has_complete_dataset(raw_dir: Path) -> bool:
     """Return whether raw_dir contains all expected non-empty class folders."""
@@ -183,6 +192,7 @@ def split_dataset(
                 "filepath": str(path.relative_to(Path(BASE_DIR))),
                 "label": label,
                 "class_name": class_name,
+                "content_hash": _file_sha256(path),
             }
             for path in image_paths
         )
@@ -191,30 +201,52 @@ def split_dataset(
     if frame.empty:
         raise ValueError("Không tìm thấy ảnh hợp lệ trong dataset.")
 
-    train_frame, remainder = train_test_split(
-        frame,
+    groups = frame.groupby("content_hash", as_index=False).agg(
+        label=("label", "first"),
+    )
+    conflicting_groups = frame.groupby("content_hash")["label"].nunique()
+    conflicting_hashes = set(conflicting_groups[conflicting_groups > 1].index)
+    if conflicting_hashes:
+        excluded = frame[frame["content_hash"].isin(conflicting_hashes)].drop(
+            columns=["content_hash"]
+        )
+        excluded.to_csv(
+            Path(SPLITS_DIR) / "excluded_conflicting_duplicates.csv",
+            index=False,
+        )
+        frame = frame[~frame["content_hash"].isin(conflicting_hashes)].copy()
+        groups = groups[~groups["content_hash"].isin(conflicting_hashes)].copy()
+
+    train_groups, remainder_groups = train_test_split(
+        groups,
         test_size=1 - train_ratio,
-        stratify=frame["label"],
+        stratify=groups["label"],
         random_state=seed,
     )
     val_share_of_remainder = val_ratio / (1 - train_ratio)
-    val_frame, test_frame = train_test_split(
-        remainder,
+    val_groups, test_groups = train_test_split(
+        remainder_groups,
         test_size=1 - val_share_of_remainder,
-        stratify=remainder["label"],
+        stratify=remainder_groups["label"],
         random_state=seed,
     )
 
     os.makedirs(SPLITS_DIR, exist_ok=True)
+    group_splits = {
+        "train": set(train_groups["content_hash"]),
+        "val": set(val_groups["content_hash"]),
+        "test": set(test_groups["content_hash"]),
+    }
     split_frames = {
-        "train": train_frame,
-        "val": val_frame,
-        "test": test_frame,
+        split_name: frame[frame["content_hash"].isin(content_hashes)]
+        for split_name, content_hashes in group_splits.items()
     }
     split_paths = {}
     for split_name, split_frame in split_frames.items():
         split_path = Path(SPLITS_DIR) / f"{split_name}.csv"
-        split_frame.sort_values(["label", "filepath"]).to_csv(split_path, index=False)
+        split_frame.drop(columns=["content_hash"]).sort_values(
+            ["label", "filepath"]
+        ).to_csv(split_path, index=False)
         split_paths[split_name] = str(split_path)
 
     return split_paths
@@ -227,10 +259,7 @@ class FruitVegDataset(Dataset):
     """
     PyTorch Dataset class cho bài toán phân loại ảnh.
 
-    TODO:
-    - __init__: load CSV split file, khởi tạo transform.
-    - __len__: trả về số ảnh.
-    - __getitem__: load ảnh từ filepath, apply transform, trả về (image_tensor, label).
+    Loads a CSV split, decodes an image and returns a transformed tensor and label.
     """
 
     def __init__(self, split_file: str, img_size: int, transform=None):
@@ -313,6 +342,53 @@ def build_dataloader(split_name: str, img_size: int, batch_size: int = BATCH_SIZ
         num_workers=0,
         pin_memory=torch.cuda.is_available(),
     )
+
+
+def get_class_weights(split_name: str = "train") -> torch.Tensor:
+    """Return normalized inverse-frequency weights for the requested split."""
+    split_file = Path(SPLITS_DIR) / f"{split_name}.csv"
+    if not split_file.is_file():
+        raise FileNotFoundError(f"Không tìm thấy split file: {split_file}")
+    frame = pd.read_csv(split_file)
+    counts = frame["label"].value_counts().reindex(range(NUM_CLASSES), fill_value=0)
+    if (counts == 0).any():
+        raise ValueError("Split file phải chứa ít nhất một ảnh cho mỗi class.")
+    weights = len(frame) / (NUM_CLASSES * counts.astype(float))
+    return torch.tensor(weights.to_numpy(), dtype=torch.float32)
+
+
+def find_cross_split_duplicates() -> Dict[str, List[str]]:
+    """Find byte-identical images that occur in more than one split."""
+    split_hashes: Dict[str, Dict[str, str]] = {}
+    for split_name in ("train", "val", "test"):
+        split_file = Path(SPLITS_DIR) / f"{split_name}.csv"
+        if not split_file.is_file():
+            raise FileNotFoundError(f"Không tìm thấy split file: {split_file}")
+        frame = pd.read_csv(split_file)
+        hashes = {}
+        for relative_path in frame["filepath"]:
+            image_path = Path(BASE_DIR) / Path(relative_path)
+            if not image_path.is_file():
+                raise FileNotFoundError(f"Không tìm thấy ảnh: {image_path}")
+            hashes[_file_sha256(image_path)] = str(relative_path)
+        split_hashes[split_name] = hashes
+
+    duplicates: Dict[str, List[str]] = {}
+    for split_name, hashes in split_hashes.items():
+        for digest, relative_path in hashes.items():
+            other_splits = [
+                other_name
+                for other_name, other_hashes in split_hashes.items()
+                if other_name != split_name and digest in other_hashes
+            ]
+            if other_splits:
+                locations = [f"{split_name}:{relative_path}"]
+                locations.extend(
+                    f"{other_name}:{split_hashes[other_name][digest]}"
+                    for other_name in other_splits
+                )
+                duplicates[digest] = sorted(set(locations))
+    return duplicates
 
 
 def create_augmentation_pipeline(img_size: int):

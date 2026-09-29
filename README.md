@@ -27,15 +27,14 @@ Dự án so sánh 3 hướng tiếp cận chính:
 - Mục tiêu cải thiện khả năng trích xuất đặc trưng không gian so với M1.
 
 ### M3: Transfer Learning + Fine-tuning
-- Dùng backbone pretrained (ví dụ: MobileNetV2/ResNet/EfficientNet).
-- Huấn luyện theo 2 giai đoạn:
-  1. Transfer learning (đóng băng backbone).
-  2. Fine-tuning (mở một phần/tất cả backbone để tinh chỉnh).
+- Dùng MobileNetV2 pretrained.
+- Huấn luyện theo 2 giai đoạn: 5 epoch đóng băng backbone, sau đó 5 epoch
+  fine-tuning với learning rate nhỏ hơn.
 
 ## 4. Quy trình thực hiện
 1. **Collect data** từ Kaggle dataset.
 2. Tiền xử lý ảnh: resize, normalize, augmentation (nếu cần).
-3. Chia dữ liệu train/validation/test.
+3. Chia dữ liệu train/validation/test theo nhóm ảnh có cùng SHA-256 để tránh leakage.
 4. Huấn luyện riêng cho M1, M2, M3.
 5. Đánh giá và so sánh bằng các chỉ số:
    - Accuracy
@@ -109,6 +108,10 @@ Lệnh này tạo:
 - `data/splits/val.csv` (15%)
 - `data/splits/test.csv` (15%)
 
+Nếu dataset chứa các file byte-identical ở nhiều class, các file có nhãn mâu thuẫn
+được giữ nguyên trong `data/raw/` nhưng loại khỏi split và ghi vào
+`data/splits/excluded_conflicting_duplicates.csv`.
+
 ### Huấn luyện
 
 ```bash
@@ -129,7 +132,8 @@ python -m src.train --model M1 --epochs 10 --batch_size 32 --lr 0.001
 python -m src.evaluate --model M1
 ```
 
-Checkpoint được lưu tại `models/<model>_best.pth`; metrics và confusion matrix được lưu trong `results/`.
+Checkpoint được lưu tại `models/<model>_best.pth`. Checkpoint được chọn theo
+validation macro-F1; metrics và confusion matrix được lưu trong `results/`.
 
 ### Kiểm thử
 

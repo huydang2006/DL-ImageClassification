@@ -18,7 +18,7 @@ class DeepCNN(nn.Module):
     """
     Mạng CNN sâu.
 
-    TODO: dùng nn.Sequential hoặc custom module để build kiến trúc trên.
+    Uses convolutional blocks followed by adaptive pooling and a classifier.
     """
 
     def __init__(self, num_classes: int = NUM_CLASSES):

@@ -30,13 +30,13 @@ def evaluate(model_name, checkpoint_path=None):
     """
     Load model đã huấn luyện từ models/, đánh giá trên tập test.
 
-    Các bước (placeholder):
+    Các bước:
     1. load dataset test
-    2. load weights từ models/<model_name>*.weights.h5
+    2. load state_dict từ models/<model_name>_best.pth
     3. predict trên test set
     4. Tính metrics: accuracy, precision, recall, F1 (overall + per-class)
-    5. Vẽ confusion matrix, ROC curve -> lưu vào results/plots/
-    6. Lưu bảng metrics -> results/metrics/<model_name>_metrics.json
+    5. Vẽ confusion matrix -> lưu vào results/plots/
+    6. Lưu bảng metrics -> results/metrics/<model_name>_evaluation.json
     """
     image_size = {
         "M1": IMG_SIZE_M1,

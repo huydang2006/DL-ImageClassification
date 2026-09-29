@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from sklearn.metrics import f1_score
 
 from src.config import (
     NUM_CLASSES,
@@ -19,16 +20,20 @@ from src.config import (
     BATCH_SIZE,
     LEARNING_RATE,
     EPOCHS,
+    M3_FREEZE_EPOCHS,
+    M3_FINETUNE_EPOCHS,
+    LR_SCHEDULER_PATIENCE,
+    EARLY_STOPPING_PATIENCE,
     SEED,
     MODELS_DIR,
     RESULTS_DIR,
 )
-from src.data import build_dataloader, split_dataset
+from src.data import build_dataloader, get_class_weights, split_dataset
 from src.utils import save_metrics, save_model
 from src.utils import set_seed
 
 
-def build_model(model_name: str) -> nn.Module:
+def build_model(model_name: str, pretrained: bool = False) -> nn.Module:
     """
     Khởi tạo model dựa trên tên.
 
@@ -46,7 +51,7 @@ def build_model(model_name: str) -> nn.Module:
         return DeepCNN()
     elif model_name == "M3":
         from src.models.transfer import TransferModel
-        return TransferModel()
+        return TransferModel(pretrained=pretrained)
     else:
         raise ValueError(f"Chọn M1, M2 hoặc M3. Nhận được: {model_name}")
 
@@ -55,20 +60,26 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float):
     """
     Huấn luyện model trên dataset.
 
-    Các bước (placeholder):
+    Các bước:
     1. set_seed(SEED)
     2. load dataset train / val từ src.data.build_dataloader()
     3. build model + di chuyển sang device (cuda nếu có)
     4. optimizer = optim.Adam(model.parameters(), lr=lr), loss = nn.CrossEntropyLoss()
-    5. callbacks: EarlyStopping (custom), ReduceLROnPlateau
+    5. class-weighted loss, ReduceLROnPlateau và early stopping theo macro-F1
     6. vòng lặp: for epoch in range(epochs):
          - training loop (forward, loss, backward, step)
          - validation loop (tính loss + accuracy)
          - log metrics, lưu best model -> models/<model_name>.pth
-    7. lưu metrics -> results/metrics/<model_name>_metrics.json
+    7. M3 dùng MobileNetV2 pretrained, freeze 5 epoch rồi fine-tune với lr nhỏ hơn
+    8. lưu metrics -> results/metrics/<model_name>_training.json
     """
     set_seed(SEED)
-    epochs = EPOCHS if epochs is None else epochs
+    if epochs is None:
+        epochs = (
+            M3_FREEZE_EPOCHS + M3_FINETUNE_EPOCHS
+            if model_name == "M3"
+            else EPOCHS
+        )
     batch_size = BATCH_SIZE if batch_size is None else batch_size
     lr = LEARNING_RATE if lr is None else lr
     if epochs <= 0 or batch_size <= 0 or lr <= 0:
@@ -86,14 +97,36 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float):
     train_loader = build_dataloader("train", image_size, batch_size)
     val_loader = build_dataloader("val", image_size, batch_size)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = build_model(model_name).to(device)
-    criterion = nn.CrossEntropyLoss()
+    model = build_model(model_name, pretrained=model_name == "M3").to(device)
+    class_weights = get_class_weights("train").to(device)
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     history = []
-    best_val_loss = float("inf")
+    best_val_f1 = float("-inf")
+    epochs_without_improvement = 0
     best_path = Path(MODELS_DIR) / f"{model_name}_best.pth"
+    freeze_epochs = 0
+    if model_name == "M3":
+        freeze_epochs = min(M3_FREEZE_EPOCHS, epochs)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="max",
+        factor=0.5,
+        patience=LR_SCHEDULER_PATIENCE,
+    )
     for epoch in range(1, epochs + 1):
+        if model_name == "M3" and epoch == freeze_epochs + 1:
+            from src.models.transfer import unfreeze_backbone
+
+            unfreeze_backbone(model)
+            optimizer = optim.Adam(model.parameters(), lr=lr * 0.1)
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="max",
+                factor=0.5,
+                patience=LR_SCHEDULER_PATIENCE,
+            )
         epoch_start = time.perf_counter()
         print(f"Epoch {epoch}/{epochs} - training...", flush=True)
         model.train()
@@ -120,6 +153,8 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float):
         val_loss = 0.0
         val_correct = 0
         val_total = 0
+        val_targets = []
+        val_predictions = []
         with torch.no_grad():
             for images, labels in val_loader:
                 images, labels = images.to(device), labels.to(device)
@@ -128,6 +163,15 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float):
                 val_loss += loss.item() * labels.size(0)
                 val_correct += (outputs.argmax(dim=1) == labels).sum().item()
                 val_total += labels.size(0)
+                val_targets.extend(labels.cpu().tolist())
+                val_predictions.extend(outputs.argmax(dim=1).cpu().tolist())
+
+        val_macro_f1 = f1_score(
+            val_targets,
+            val_predictions,
+            average="macro",
+            zero_division=0,
+        )
 
         epoch_metrics = {
             "epoch": epoch,
@@ -135,6 +179,7 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float):
             "train_accuracy": train_correct / train_total,
             "val_loss": val_loss / val_total,
             "val_accuracy": val_correct / val_total,
+            "val_macro_f1": val_macro_f1,
         }
         history.append(epoch_metrics)
         elapsed = time.perf_counter() - epoch_start
@@ -144,12 +189,24 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float):
             f"train_acc={epoch_metrics['train_accuracy']:.4f}, "
             f"val_loss={epoch_metrics['val_loss']:.4f}, "
             f"val_acc={epoch_metrics['val_accuracy']:.4f}, "
+            f"val_macro_f1={epoch_metrics['val_macro_f1']:.4f}, "
             f"time={elapsed / 60:.1f} min",
             flush=True,
         )
-        if epoch_metrics["val_loss"] < best_val_loss:
-            best_val_loss = epoch_metrics["val_loss"]
+        if epoch_metrics["val_macro_f1"] > best_val_f1:
+            best_val_f1 = epoch_metrics["val_macro_f1"]
+            epochs_without_improvement = 0
             save_model(model, str(best_path))
+        else:
+            epochs_without_improvement += 1
+        scheduler.step(epoch_metrics["val_macro_f1"])
+        if epochs_without_improvement >= EARLY_STOPPING_PATIENCE:
+            print(
+                f"Early stopping after {epoch} epochs: "
+                f"validation macro-F1 did not improve.",
+                flush=True,
+            )
+            break
 
     metrics_path = Path(RESULTS_DIR) / "metrics" / f"{model_name}_training.json"
     save_metrics(
@@ -159,6 +216,7 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float):
             "epochs": epochs,
             "batch_size": batch_size,
             "learning_rate": lr,
+            "class_weights": class_weights.cpu().tolist(),
             "history": history,
             "best_checkpoint": str(best_path),
         },

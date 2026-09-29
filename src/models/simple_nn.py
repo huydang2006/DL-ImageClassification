@@ -19,9 +19,7 @@ class SimpleNN(nn.Module):
     """
     Mạng Neural Network cơ bản.
 
-    TODO:
-    - Tính input_size = IMG_SIZE_M1 * IMG_SIZE_M1 * 3
-    - xây dựng Sequential các Linear layer theo kiến trúc trên.
+    The input size is derived from the configured image dimensions.
     """
 
     def __init__(self, num_classes: int = NUM_CLASSES):
