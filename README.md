@@ -57,7 +57,8 @@ DL-ImageClassification/
 ├── notebooks/              # EDA, demo + notebooks/README.md
 ├── src/                    # Code nguồn + src/README.md
 │   ├── config.py           # Hằng số, paths, tham số
-│   ├── data.py             # Dataset pipeline
+│   ├── data.py             # Tải dữ liệu, Dataset và DataLoader
+│   ├── preprocessing.py    # Kiểm tra, chia tập và transform ảnh
 │   ├── utils.py            # Seed, plot utilities
 │   ├── train.py            # Entry point huấn luyện
 │   ├── evaluate.py         # Entry point đánh giá
@@ -96,10 +97,10 @@ Trên Windows, file credentials thường được đặt tại:
 %USERPROFILE%\.kaggle\kaggle.json
 ```
 
-Sau khi tải dataset, tạo các split stratified:
+Sau khi tải dataset, kiểm tra ảnh và tạo các split stratified:
 
 ```bash
-python -c "from src.data import split_dataset; split_dataset()"
+python -m src.preprocessing
 ```
 
 Lệnh này tạo:
