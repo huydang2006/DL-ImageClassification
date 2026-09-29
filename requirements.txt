@@ -21,3 +21,6 @@ notebook
 # Kaggle access (dataset cache/download for notebooks)
 kaggle>=1.5.13
 kagglehub>=0.3.0
+
+# Testing
+pytest>=8.0.0

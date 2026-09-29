@@ -20,11 +20,11 @@ NUM_CLASSES = 28          # 14 loại rau/củ × 2 trạng thái (Healthy/Rotte
 IMG_SIZE_M1 = 128         # kích thước ảnh dùng cho M1 (Simple NN)
 IMG_SIZE_M2 = 128         # kích thước ảnh dùng cho M2 (Deep CNN)
 IMG_SIZE_M3 = 224         # kích thước ảnh dùng cho M3 (transfer learning)
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 SEED = 42
 
 # ---------------------------------------------------------------------------
 # Tham số huấn luyện (placeholder)
 # ---------------------------------------------------------------------------
 LEARNING_RATE = 1e-3       # placeholder — sẽ cấu hình chi tiết trong lúc train
-EPOCHS = 50               # placeholder
+EPOCHS = 10             # placeholder

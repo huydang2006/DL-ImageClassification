@@ -29,12 +29,50 @@ class TransferModel(nn.Module):
     - nếu freeze_backbone: for param in backbone.parameters(): param.requires_grad = False
     """
 
-    def __init__(self, backbone_name="mobilenet_v2", num_classes: int = NUM_CLASSES, freeze_backbone: bool = True):
+    def __init__(
+        self,
+        backbone_name="mobilenet_v2",
+        num_classes: int = NUM_CLASSES,
+        freeze_backbone: bool = True,
+        pretrained: bool = False,
+    ):
         super(TransferModel, self).__init__()
-        # TODO: self.backbone = models.<backbone_name>(pretrained=True)
-        #       self.classifier = nn.Linear(...)  # hoặc thay classifier gốc
-        #       if freeze_backbone: freeze các param
-        return
+        builders = {
+            "mobilenet_v2": (
+                models.mobilenet_v2,
+                models.MobileNet_V2_Weights.DEFAULT,
+            ),
+            "resnet50": (models.resnet50, models.ResNet50_Weights.DEFAULT),
+            "efficientnet_b0": (
+                models.efficientnet_b0,
+                models.EfficientNet_B0_Weights.DEFAULT,
+            ),
+        }
+        if backbone_name not in builders:
+            raise ValueError(f"Backbone không hợp lệ: {backbone_name}")
+
+        builder, weights = builders[backbone_name]
+        self.backbone = builder(weights=weights if pretrained else None)
+        if backbone_name == "mobilenet_v2":
+            in_features = self.backbone.classifier[-1].in_features
+            self.backbone.classifier[-1] = nn.Linear(in_features, num_classes)
+        elif backbone_name == "efficientnet_b0":
+            in_features = self.backbone.classifier[-1].in_features
+            self.backbone.classifier[-1] = nn.Linear(in_features, num_classes)
+        else:
+            in_features = self.backbone.fc.in_features
+            self.backbone.fc = nn.Linear(in_features, num_classes)
+
+        if freeze_backbone:
+            for parameter in self.backbone.parameters():
+                parameter.requires_grad = False
+            classifier = (
+                self.backbone.classifier
+                if hasattr(self.backbone, "classifier")
+                else self.backbone.fc
+            )
+            for parameter in classifier.parameters():
+                parameter.requires_grad = True
 
     def forward(self, x):
         """
@@ -43,18 +81,19 @@ class TransferModel(nn.Module):
         Returns:
             logits: tensor [batch, num_classes]
         """
-        # x = self.backbone(x)
-        # logits = self.classifier(x)
-        # return logits
-        raise NotImplementedError
+        return self.backbone(x)
 
 
 def unfreeze_backbone(model: TransferModel, unfreeze_from: int = 100):
     """
     Mở backbone để fine-tuning từ layer thứ `unfreeze_from` trở lên.
 
-    TODO:
-    - for param in model.parameters(): param.requires_grad = True
-    - Có thể set requires_grad=False cho các layer trước `unfreeze_from`
+    Mở toàn bộ backbone để fine-tuning.
     """
-    raise NotImplementedError
+    parameters = list(model.backbone.parameters())
+    for parameter in parameters:
+        parameter.requires_grad = True
+    if unfreeze_from > 0:
+        for parameter in parameters[:unfreeze_from]:
+            parameter.requires_grad = False
+    return model

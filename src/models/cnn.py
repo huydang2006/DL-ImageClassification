@@ -11,7 +11,7 @@ Regularizations đề xuất: BatchNorm2d, Dropout, L2 (weight_decay).
 
 import torch.nn as nn
 
-from src.config import IMG_SIZE_M2
+from src.config import NUM_CLASSES
 
 
 class DeepCNN(nn.Module):
@@ -21,11 +21,28 @@ class DeepCNN(nn.Module):
     TODO: dùng nn.Sequential hoặc custom module để build kiến trúc trên.
     """
 
-    def __init__(self, num_classes: int = 28):
+    def __init__(self, num_classes: int = NUM_CLASSES):
         super(DeepCNN, self).__init__()
-        # TODO: self.features = nn.Sequential([...])
-        #       self.classifier = nn.Sequential([...])
-        return
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.AdaptiveAvgPool2d(1),
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(0.5),
+            nn.Linear(128, num_classes),
+        )
 
     def forward(self, x):
         """
@@ -34,7 +51,4 @@ class DeepCNN(nn.Module):
         Returns:
             logits: tensor [batch, num_classes]
         """
-        # x = self.features(x)
-        # x = self.classifier(x)
-        # return x
-        raise NotImplementedError
+        return self.classifier(self.features(x))

@@ -78,14 +78,63 @@ pip install -r requirements.txt
 
 ## 8. Cách dùng
 
+### Chuẩn bị dữ liệu
+
+Có thể tải dataset tự động bằng Kaggle CLI:
+
 ```bash
-# Huấn luyện
+python -c "from src.data import download_dataset; print(download_dataset())"
+```
+
+Nếu `data/raw/` đã chứa đủ 28 class có ảnh hợp lệ, lệnh trên sẽ bỏ qua download. Nếu chưa có, lệnh sẽ tải dataset, giải nén vào `data/raw/`, xóa file `.zip` tạm và kiểm tra lại cấu trúc.
+
+Trước lần tải đầu tiên, cần cấu hình Kaggle API credentials. Xem hướng dẫn chính thức tại:
+https://www.kaggle.com/docs/api
+
+Trên Windows, file credentials thường được đặt tại:
+
+```text
+%USERPROFILE%\.kaggle\kaggle.json
+```
+
+Sau khi tải dataset, tạo các split stratified:
+
+```bash
+python -c "from src.data import split_dataset; split_dataset()"
+```
+
+Lệnh này tạo:
+
+- `data/splits/train.csv` (70%)
+- `data/splits/val.csv` (15%)
+- `data/splits/test.csv` (15%)
+
+### Huấn luyện
+
+```bash
 python -m src.train --model M1        # Simple NN (baseline)
 python -m src.train --model M2        # Deep CNN
 python -m src.train --model M3        # Transfer learning
+```
 
-# Đánh giá
+Có thể ghi đè tham số:
+
+```bash
+python -m src.train --model M1 --epochs 10 --batch_size 32 --lr 0.001
+```
+
+### Đánh giá
+
+```bash
 python -m src.evaluate --model M1
+```
+
+Checkpoint được lưu tại `models/<model>_best.pth`; metrics và confusion matrix được lưu trong `results/`.
+
+### Kiểm thử
+
+```bash
+pytest -q
 ```
 
 Framework: **PyTorch** + **torchvision**.

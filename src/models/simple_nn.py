@@ -26,8 +26,17 @@ class SimpleNN(nn.Module):
 
     def __init__(self, num_classes: int = NUM_CLASSES):
         super(SimpleNN, self).__init__()
-        # TODO: self.net = nn.Sequential(...)
-        return
+        input_size = IMG_SIZE_M1 * IMG_SIZE_M1 * 3
+        self.net = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(input_size, 256),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(128, num_classes),
+        )
 
     def forward(self, x):
         """
@@ -36,7 +45,4 @@ class SimpleNN(nn.Module):
         Returns:
             logits: tensor [batch, num_classes]
         """
-        # x = x.view(x.size(0), -1)  # flatten
-        # logits = self.net(x)
-        # return logits
-        raise NotImplementedError
+        return self.net(x)

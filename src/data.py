@@ -1,12 +1,23 @@
 """Pipeline dữ liệu: tải, tiền xử lý, chia tập và tạo DataLoader (PyTorch)."""
 
 import os
-from typing import Tuple, Dict
+import shutil
+import subprocess
+import sys
+import tempfile
+import zipfile
+from pathlib import Path
+from typing import Tuple, Dict, List
 
+import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import train_test_split
+from PIL import Image
+from torchvision import transforms
 
 from src.config import (
+    BASE_DIR,
     RAW_DATA_DIR,
     SPLITS_DIR,
     IMG_SIZE_M1,
@@ -16,24 +27,109 @@ from src.config import (
     SEED,
 )
 
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+KAGGLE_DATASET = "muhammad0subhan/fruit-and-vegetable-disease-healthy-vs-rotten"
+
 
 # ---------------------------------------------------------------------------
 # Hàm placeholder
 # ---------------------------------------------------------------------------
-def download_dataset():
+def _has_complete_dataset(raw_dir: Path) -> bool:
+    """Return whether raw_dir contains all expected non-empty class folders."""
+    class_dirs = [path for path in raw_dir.iterdir() if path.is_dir()] if raw_dir.is_dir() else []
+    if len(class_dirs) != NUM_CLASSES:
+        return False
+    return all(
+        any(
+            path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+            for path in class_dir.rglob("*")
+        )
+        for class_dir in class_dirs
+    )
+
+
+def _safe_extract(zip_path: Path, destination: Path) -> None:
+    """Extract a zip archive without allowing paths outside destination."""
+    destination = destination.resolve()
+    with zipfile.ZipFile(zip_path) as archive:
+        for member in archive.infolist():
+            target = (destination / member.filename).resolve()
+            if target != destination and destination not in target.parents:
+                raise RuntimeError(f"Archive chứa đường dẫn không an toàn: {member.filename}")
+        archive.extractall(destination)
+
+
+def download_dataset() -> str:
     """
     Tải dataset từ Kaggle sử dụng Kaggle API.
 
     Dataset: Fruit and Vegetable Disease (Healthy vs Rotten)
     URL: https://www.kaggle.com/datasets/muhammad0subhan/fruit-and-vegetable-disease-healthy-vs-rotten
 
-    TODO:
-    - Cài đặt kaggle API
-    - Download và giải nén vào RAW_DATA_DIR
+    Returns:
+        Mô tả hành động: dataset đã tồn tại hoặc đã tải xuống.
     """
-    # !kaggle datasets download -d muhammad0subhan/fruit-and-vegetable-disease-healthy-vs-rotten
-    # unzip ... -d RAW_DATA_DIR
-    raise NotImplementedError
+    raw_dir = Path(RAW_DATA_DIR)
+    if _has_complete_dataset(raw_dir):
+        return f"Dataset đã tồn tại tại {raw_dir}; bỏ qua tải xuống."
+
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="kaggle-download-") as temp_dir:
+        download_dir = Path(temp_dir)
+        command = [
+            sys.executable,
+            "-m",
+            "kaggle",
+            "datasets",
+            "download",
+            "-d",
+            KAGGLE_DATASET,
+            "-p",
+            str(download_dir),
+        ]
+        try:
+            subprocess.run(command, check=True)
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "Không tìm thấy Kaggle CLI. Hãy cài dependencies bằng "
+                "'pip install -r requirements.txt'."
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                "Kaggle download thất bại. Hãy kiểm tra Kaggle API credentials "
+                "và quyền truy cập dataset."
+            ) from exc
+
+        archives = list(download_dir.glob("*.zip"))
+        if len(archives) != 1:
+            raise RuntimeError(
+                f"Kỳ vọng đúng một file zip từ Kaggle, nhận được {len(archives)}."
+            )
+
+        extracted_dir = download_dir / "extracted"
+        extracted_dir.mkdir()
+        _safe_extract(archives[0], extracted_dir)
+        candidate_roots = [extracted_dir] + [
+            path for path in extracted_dir.rglob("*") if path.is_dir()
+        ]
+        source_root = next(
+            (path for path in candidate_roots if _has_complete_dataset(path)),
+            None,
+        )
+        if source_root is None:
+            raise RuntimeError(
+                "Dataset tải về không chứa đủ 28 thư mục class có ảnh hợp lệ."
+            )
+
+        for source in source_root.iterdir():
+            destination = raw_dir / source.name
+            if destination.exists():
+                shutil.rmtree(destination) if destination.is_dir() else destination.unlink()
+            shutil.move(str(source), str(destination))
+
+    if not _has_complete_dataset(raw_dir):
+        raise RuntimeError("Dataset sau khi giải nén không hợp lệ.")
+    return f"Đã tải và giải nén dataset vào {raw_dir}."
 
 
 def get_labels_mapping() -> Dict[str, int]:
@@ -42,18 +138,86 @@ def get_labels_mapping() -> Dict[str, int]:
 
     Dataset gồm 28 thư mục con, mỗi thư mục tương ứng 1 lớp.
     Ví dụ: {"Apple_healthy": 0, "Apple_rotten": 1, ...}
-
-    TODO: quét RAW_DATA_DIR để sinh mapping tự động.
     """
-    raise NotImplementedError
+    raw_dir = Path(RAW_DATA_DIR)
+    if not raw_dir.is_dir():
+        raise FileNotFoundError(f"Không tìm thấy thư mục dữ liệu: {raw_dir}")
+
+    class_names = sorted(path.name for path in raw_dir.iterdir() if path.is_dir())
+    if not class_names:
+        raise ValueError(f"Không tìm thấy thư mục class trong: {raw_dir}")
+
+    return {class_name: index for index, class_name in enumerate(class_names)}
 
 
-def split_dataset():
+def split_dataset(
+    train_ratio: float = 0.7,
+    val_ratio: float = 0.15,
+    seed: int = SEED,
+) -> Dict[str, str]:
     """
     Chia dataset thành train / val / test (70/15/15) theo stratified sampling
     trên 28 lớp, lưu kết quả dưới dạng CSV vào SPLITS_DIR.
+
+    Returns:
+        Dict ánh xạ tên split ("train", "val", "test") tới đường dẫn CSV.
     """
-    raise NotImplementedError
+    if train_ratio <= 0 or val_ratio <= 0 or train_ratio + val_ratio >= 1:
+        raise ValueError("train_ratio và val_ratio phải dương, tổng phải nhỏ hơn 1.")
+
+    labels_mapping = get_labels_mapping()
+    records: List[dict] = []
+    raw_dir = Path(RAW_DATA_DIR)
+
+    for class_name, label in labels_mapping.items():
+        class_dir = raw_dir / class_name
+        image_paths = sorted(
+            path for path in class_dir.rglob("*")
+            if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+        )
+        if not image_paths:
+            raise ValueError(f"Class không có ảnh hợp lệ: {class_name}")
+
+        records.extend(
+            {
+                "filepath": str(path.relative_to(Path(BASE_DIR))),
+                "label": label,
+                "class_name": class_name,
+            }
+            for path in image_paths
+        )
+
+    frame = pd.DataFrame(records)
+    if frame.empty:
+        raise ValueError("Không tìm thấy ảnh hợp lệ trong dataset.")
+
+    train_frame, remainder = train_test_split(
+        frame,
+        test_size=1 - train_ratio,
+        stratify=frame["label"],
+        random_state=seed,
+    )
+    val_share_of_remainder = val_ratio / (1 - train_ratio)
+    val_frame, test_frame = train_test_split(
+        remainder,
+        test_size=1 - val_share_of_remainder,
+        stratify=remainder["label"],
+        random_state=seed,
+    )
+
+    os.makedirs(SPLITS_DIR, exist_ok=True)
+    split_frames = {
+        "train": train_frame,
+        "val": val_frame,
+        "test": test_frame,
+    }
+    split_paths = {}
+    for split_name, split_frame in split_frames.items():
+        split_path = Path(SPLITS_DIR) / f"{split_name}.csv"
+        split_frame.sort_values(["label", "filepath"]).to_csv(split_path, index=False)
+        split_paths[split_name] = str(split_path)
+
+    return split_paths
 
 
 # ---------------------------------------------------------------------------
@@ -76,14 +240,37 @@ class FruitVegDataset(Dataset):
             img_size: int, kích thước ảnh resize (128 hoặc 224).
             transform: torchvision.transforms.Compose (nếu có).
         """
-        self.transform = transform
-        raise NotImplementedError
+        self.transform = transform or get_default_transform(img_size)
+        self.frame = pd.read_csv(split_file)
+        required_columns = {"filepath", "label", "class_name"}
+        missing_columns = required_columns.difference(self.frame.columns)
+        if missing_columns:
+            raise ValueError(
+                f"Split file thiếu các cột bắt buộc: {sorted(missing_columns)}"
+            )
+        if self.frame.empty:
+            raise ValueError(f"Split file không có dữ liệu: {split_file}")
+        self.frame["label"] = self.frame["label"].astype(int)
+        if not self.frame["label"].between(0, NUM_CLASSES - 1).all():
+            raise ValueError("Split file chứa label nằm ngoài khoảng hợp lệ.")
 
     def __len__(self) -> int:
-        raise NotImplementedError
+        return len(self.frame)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
-        raise NotImplementedError
+        row = self.frame.iloc[idx]
+        image_path = Path(BASE_DIR) / Path(row["filepath"])
+        if not image_path.is_file():
+            raise FileNotFoundError(f"Không tìm thấy ảnh: {image_path}")
+        try:
+            with Image.open(image_path) as image:
+                if image.mode == "P" and "transparency" in image.info:
+                    image = image.convert("RGBA").convert("RGB")
+                else:
+                    image = image.convert("RGB")
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(f"Không thể đọc ảnh: {image_path}") from exc
+        return self.transform(image), int(row["label"])
 
 
 # ---------------------------------------------------------------------------
@@ -101,10 +288,31 @@ def build_dataloader(split_name: str, img_size: int, batch_size: int = BATCH_SIZ
     Returns:
         torch.utils.data.DataLoader
     """
-    # TODO: load transform (train: augmentation + normalize; val/test: chỉ normalize)
-    # dataset = FruitVegDataset(split_file, img_size, transform)
-    # loader = DataLoader(dataset, batch_size=batch_size, shuffle=..., num_workers=...)
-    raise NotImplementedError
+    if split_name.endswith(".csv"):
+        split_name = split_name[:-4]
+    if split_name not in {"train", "val", "test"}:
+        raise ValueError("split_name phải là một trong: train, val, test.")
+    if batch_size <= 0:
+        raise ValueError("batch_size phải lớn hơn 0.")
+
+    split_file = Path(SPLITS_DIR) / f"{split_name}.csv"
+    if not split_file.is_file():
+        raise FileNotFoundError(
+            f"Không tìm thấy split file: {split_file}. Hãy chạy split_dataset() trước."
+        )
+    transform = (
+        create_augmentation_pipeline(img_size)
+        if split_name == "train"
+        else get_default_transform(img_size)
+    )
+    dataset = FruitVegDataset(str(split_file), img_size, transform=transform)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=split_name == "train",
+        num_workers=0,
+        pin_memory=torch.cuda.is_available(),
+    )
 
 
 def create_augmentation_pipeline(img_size: int):
@@ -114,15 +322,34 @@ def create_augmentation_pipeline(img_size: int):
     Augmentations đề xuất: RandomHorizontalFlip, RandomRotation, ColorJitter,
     RandomResizedCrop/Resize.
 
-    TODO: dùng torchvision.transforms.Compose([...])
     """
-    raise NotImplementedError
+    return transforms.Compose(
+        [
+            transforms.Resize((img_size, img_size)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(10),
+            transforms.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=(0.485, 0.456, 0.406),
+                std=(0.229, 0.224, 0.225),
+            ),
+        ]
+    )
 
 
 def get_default_transform(img_size: int):
     """
     Transform chuẩn cho validation/test (resize + to_tensor + normalize ImageNet stats).
 
-    TODO: torchvision.transforms.Compose([Resize, ToTensor, Normalize])
     """
-    raise NotImplementedError
+    return transforms.Compose(
+        [
+            transforms.Resize((img_size, img_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=(0.485, 0.456, 0.406),
+                std=(0.229, 0.224, 0.225),
+            ),
+        ]
+    )

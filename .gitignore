@@ -27,6 +27,7 @@ env/
 # Data - large files / sensitive (root-level only)
 /data/raw/
 /data/processed/
+/data/splits/
 
 # Trained model weights (ignore artifacts, keep folder + README)
 /models/*.h5
