@@ -11,6 +11,30 @@ import torch
 import matplotlib.pyplot as plt
 
 
+def get_device(requested="auto"):
+    """Resolve a requested device while preserving CPU fallback compatibility."""
+    requested = requested.lower()
+    if requested not in {"auto", "cpu", "cuda", "xpu"}:
+        raise ValueError("device phải là một trong: auto, cpu, cuda, xpu.")
+
+    if requested == "cpu":
+        return torch.device("cpu")
+    if requested == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA được yêu cầu nhưng không khả dụng trong môi trường này.")
+        return torch.device("cuda")
+    if requested == "xpu":
+        if not hasattr(torch, "xpu") or not torch.xpu.is_available():
+            raise RuntimeError("XPU được yêu cầu nhưng không khả dụng trong môi trường này.")
+        return torch.device("xpu")
+
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch, "xpu") and torch.xpu.is_available():
+        return torch.device("xpu")
+    return torch.device("cpu")
+
+
 def set_seed(seed=42):
     """
     Cố định seed cho random, numpy, pytorch để kết quả tái lắp được.
@@ -23,6 +47,8 @@ def set_seed(seed=42):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    if hasattr(torch, "xpu") and torch.xpu.is_available():
+        torch.xpu.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 

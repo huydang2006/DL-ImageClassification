@@ -76,6 +76,23 @@ venv\Scripts\activate      # Windows
 pip install -r requirements.txt
 ```
 
+`requirements.txt` là profile mặc định, phù hợp với CPU và không khóa người dùng
+vào một loại GPU cụ thể. Nếu máy dùng Intel Arc/Xe và muốn chạy bằng XPU, cài
+profile tùy chọn bằng wheel chính thức của PyTorch:
+
+```bash
+pip install -r requirements-xpu.txt --extra-index-url https://download.pytorch.org/whl/xpu
+```
+
+Kiểm tra XPU:
+
+```bash
+python -c "import torch; print(torch.xpu.is_available()); print(torch.xpu.device_count())"
+```
+
+Các lệnh train/evaluate mặc định dùng `auto`: ưu tiên CUDA, sau đó XPU, rồi CPU.
+Có thể chọn rõ thiết bị bằng `--device cpu`, `--device cuda` hoặc `--device xpu`.
+
 ## 8. Cách dùng
 
 ### Chuẩn bị dữ liệu

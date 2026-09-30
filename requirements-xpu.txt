@@ -1,0 +1,10 @@
+# Common dependencies
+-r requirements.txt
+
+# Official PyTorch Intel GPU wheels for Intel Arc/Xe GPUs.
+# Keep torch and torchvision on matching versions.
+torch==2.14.0+xpu
+torchvision==0.29.0+xpu
+
+# Install with:
+#   python -m pip install -r requirements-xpu.txt --extra-index-url https://download.pytorch.org/whl/xpu

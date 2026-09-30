@@ -23,10 +23,10 @@ from src.config import (
 )
 from src.data import build_dataloader, get_labels_mapping
 from src.train import build_model
-from src.utils import save_metrics
+from src.utils import get_device, save_metrics
 
 
-def evaluate(model_name, checkpoint_path=None):
+def evaluate(model_name, checkpoint_path=None, device="auto"):
     """
     Load model đã huấn luyện từ models/, đánh giá trên tập test.
 
@@ -47,11 +47,15 @@ def evaluate(model_name, checkpoint_path=None):
     if not checkpoint.is_file():
         raise FileNotFoundError(f"Không tìm thấy checkpoint: {checkpoint}")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device(device)
     model = build_model(model_name).to(device)
     model.load_state_dict(torch.load(checkpoint, map_location=device))
     model.eval()
-    loader = build_dataloader("test", image_size)
+    loader = build_dataloader(
+        "test",
+        image_size,
+        pin_memory=device.type in {"cuda", "xpu"},
+    )
     y_true = []
     y_pred = []
     with torch.no_grad():
@@ -110,8 +114,15 @@ def evaluate(model_name, checkpoint_path=None):
 def main():
     parser = argparse.ArgumentParser(description="Evaluate fruit and vegetable classifier")
     parser.add_argument("--model", type=str, default="M1", choices=["M1", "M2", "M3"])
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        choices=["auto", "cpu", "cuda", "xpu"],
+        help="Thiết bị tính toán; auto ưu tiên CUDA, sau đó XPU, cuối cùng CPU.",
+    )
     args = parser.parse_args()
-    metrics = evaluate(args.model)
+    metrics = evaluate(args.model, device=args.device)
     print(f"Model: {metrics['model']}")
     print(f"Device: {metrics['device']}")
     print(f"Accuracy: {metrics['accuracy']:.4f}")

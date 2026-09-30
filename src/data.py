@@ -214,7 +214,12 @@ class FruitVegDataset(Dataset):
 # ---------------------------------------------------------------------------
 # DataLoader
 # ---------------------------------------------------------------------------
-def build_dataloader(split_name: str, img_size: int, batch_size: int = BATCH_SIZE) -> DataLoader:
+def build_dataloader(
+    split_name: str,
+    img_size: int,
+    batch_size: int = BATCH_SIZE,
+    pin_memory: bool = False,
+) -> DataLoader:
     """
     Tạo DataLoader cho một split (train/val/test).
 
@@ -249,7 +254,7 @@ def build_dataloader(split_name: str, img_size: int, batch_size: int = BATCH_SIZ
         batch_size=batch_size,
         shuffle=split_name == "train",
         num_workers=0,
-        pin_memory=torch.cuda.is_available(),
+        pin_memory=pin_memory,
     )
 
 

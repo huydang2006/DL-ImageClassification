@@ -1,7 +1,9 @@
 import torch
 
 from src.models import SimpleNN
-from src.utils import load_model, save_model, set_seed
+import pytest
+
+from src.utils import get_device, load_model, save_model, set_seed
 
 
 def test_seed_is_reproducible():
@@ -10,6 +12,15 @@ def test_seed_is_reproducible():
     set_seed(123)
     second = torch.rand(4)
     assert torch.equal(first, second)
+
+
+def test_get_device_cpu():
+    assert get_device("cpu") == torch.device("cpu")
+
+
+def test_get_device_rejects_unknown_device():
+    with pytest.raises(ValueError, match="device"):
+        get_device("tpu")
 
 
 def test_model_checkpoint_roundtrip(tmp_path):

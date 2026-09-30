@@ -30,8 +30,7 @@ from src.config import (
 )
 from src.data import build_dataloader
 from src.preprocessing import get_class_weights, prepare_dataset
-from src.utils import save_metrics, save_model
-from src.utils import set_seed
+from src.utils import get_device, save_metrics, save_model, set_seed
 
 
 def build_model(model_name: str, pretrained: bool = False) -> nn.Module:
@@ -57,7 +56,7 @@ def build_model(model_name: str, pretrained: bool = False) -> nn.Module:
         raise ValueError(f"Chọn M1, M2 hoặc M3. Nhận được: {model_name}")
 
 
-def train(model_name: str, epochs: int, batch_size: int, lr: float):
+def train(model_name: str, epochs: int, batch_size: int, lr: float, device="auto"):
     """
     Huấn luyện model trên dataset.
 
@@ -95,9 +94,10 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float):
         "M2": IMG_SIZE_M2,
         "M3": IMG_SIZE_M3,
     }[model_name]
-    train_loader = build_dataloader("train", image_size, batch_size)
-    val_loader = build_dataloader("val", image_size, batch_size)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device(device)
+    pin_memory = device.type in {"cuda", "xpu"}
+    train_loader = build_dataloader("train", image_size, batch_size, pin_memory)
+    val_loader = build_dataloader("val", image_size, batch_size, pin_memory)
     model = build_model(model_name, pretrained=model_name == "M3").to(device)
     class_weights = get_class_weights("train").to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
@@ -232,9 +232,16 @@ def main():
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch_size", type=int, default=None)
     parser.add_argument("--lr", type=float, default=None)
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        choices=["auto", "cpu", "cuda", "xpu"],
+        help="Thiết bị tính toán; auto ưu tiên CUDA, sau đó XPU, cuối cùng CPU.",
+    )
     args = parser.parse_args()
 
-    train(args.model, args.epochs, args.batch_size, args.lr)
+    train(args.model, args.epochs, args.batch_size, args.lr, args.device)
 
 
 if __name__ == "__main__":

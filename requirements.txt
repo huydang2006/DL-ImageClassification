@@ -1,4 +1,6 @@
 # Deep Learning Frameworks
+# This default profile works on CPU and remains compatible with CUDA environments.
+# Intel GPU users can use requirements-xpu.txt instead.
 torch>=2.0.0
 torchvision>=0.15.0
 
