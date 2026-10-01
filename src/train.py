@@ -3,6 +3,7 @@
 """
 
 import argparse
+import sys
 import time
 from pathlib import Path
 
@@ -227,6 +228,9 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float, device="auto
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Train fruit and vegetable image classifier")
     parser.add_argument("--model", type=str, default="M1", choices=["M1", "M2", "M3"])
     parser.add_argument("--epochs", type=int, default=None)

@@ -5,5 +5,5 @@ Lưu trữ các file trọng số (`.pth`) hoặc checkpoint của mô hình sau
 ## Lưu ý
 
 - Nội dung của folder này được bỏ qua bởi `.gitignore`.
-- Mỗi model được lưu với tên dạng: `<model_name>_<timestamp>.pth`.
-- File checkpoint tạm thời sẽ được lưu ở đây trước khi được đánh giá cuối cùng.
+- Mỗi model được lưu với tên dạng: `<model_name>_best.pth`.
+- Checkpoint được chọn theo validation macro-F1 trước khi được đánh giá trên test set.

@@ -1,6 +1,7 @@
 """Entry point cho đánh giá model & sinh báo cáo. python evaluate.py --model M1|M2|M3"""
 
 import argparse
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -112,6 +113,9 @@ def evaluate(model_name, checkpoint_path=None, device="auto"):
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Evaluate fruit and vegetable classifier")
     parser.add_argument("--model", type=str, default="M1", choices=["M1", "M2", "M3"])
     parser.add_argument(

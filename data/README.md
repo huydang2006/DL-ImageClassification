@@ -4,7 +4,7 @@ Nơi lưu trữ toàn bộ dữ liệu liên quan đến dự án.
 
 ## Subfolders
 
-- `data/raw/` — Dữ liệu gốc tải từ Kaggle (ảnh gốc, belum được xử lý).
+- `data/raw/` — Dữ liệu gốc tải từ Kaggle (ảnh gốc, chưa được xử lý).
 - `data/processed/` — Dữ liệu đã được tiền xử lý (resize, chuẩn hóa). Có thể lưu dưới dạng TFRecord/Tensor để tối ưu tốc độ load.
 - `data/splits/` — File `.csv` chứa danh sách ảnh được chia thành train/val/test.
 
