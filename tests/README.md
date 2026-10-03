@@ -1,14 +1,15 @@
-# Tests Directory
+# Tests
 
-Chứa các unit test cho các thành phần của dự án.
+Unit tests for project components.
 
-## Kế hoạch test
+## Contents
 
-- `test_data.py` — Kiểm tra mapping, split và pipeline load dữ liệu.
-- `test_models.py` — Kiểm tra output shape và forward pass của M1/M2/M3.
-- `test_utils.py` — Kiểm tra seed và save/load checkpoint.
+- `test_data.py` — Data loading, splits, mappings
+- `test_models.py` — Model forward pass, output shapes
+- `test_preprocessing.py` — Preprocessing pipeline, leakage prevention
+- `test_utils.py` — Seed, save/load checkpoint
 
-Chạy toàn bộ test từ thư mục gốc:
+## Run
 
 ```bash
 pytest -q

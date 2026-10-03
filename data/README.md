@@ -1,28 +1,26 @@
 # Data Directory
 
-Nơi lưu trữ toàn bộ dữ liệu liên quan đến dự án.
+Stores all project data.
 
 ## Subfolders
 
-- `data/raw/` — Dữ liệu gốc tải từ Kaggle (ảnh gốc, chưa được xử lý).
-- `data/processed/` — Dữ liệu đã được tiền xử lý (resize, chuẩn hóa). Có thể lưu dưới dạng TFRecord/Tensor để tối ưu tốc độ load.
-- `data/splits/` — File `.csv` chứa danh sách ảnh được chia thành train/val/test.
+- `data/raw/` — Original images from Kaggle
+- `data/processed/` — Preprocessed data (resized, normalized)
+- `data/splits/` — CSV files for train/val/test splits
 
-## Lưu ý
+## Notes
 
-- Nội dung thực tế của `data/` được bỏ qua bởi `.gitignore`.
-- Để tải dữ liệu tự động từ Kaggle, cấu hình Kaggle API credentials rồi chạy:
+- `data/` contents are gitignored
+- Auto-download from Kaggle (configure `kaggle.json` first):
 
   ```bash
   python -c "from src.data import download_dataset; print(download_dataset())"
   ```
 
-  Nếu dataset đã tồn tại đầy đủ, download sẽ được bỏ qua. File zip tạm sẽ được xóa sau khi giải nén.
-
-- Hoặc tải dataset thủ công về `data/raw/`, sau đó chạy:
+- Manual download: place in `data/raw/` then run:
 
   ```bash
   python -c "from src.data import split_dataset; split_dataset()"
   ```
 
-- Các split dùng stratified sampling với seed mặc định `42`.
+- Stratified splits with seed=42

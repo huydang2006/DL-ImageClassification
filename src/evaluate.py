@@ -1,4 +1,6 @@
-"""Entry point cho đánh giá model & sinh báo cáo. python evaluate.py --model M1|M2|M3"""
+"""Model evaluation and report generation.
+Usage: python -m src.evaluate --model M1|M2|M3
+"""
 
 import argparse
 import sys
@@ -28,16 +30,9 @@ from src.utils import get_device, save_metrics
 
 
 def evaluate(model_name, checkpoint_path=None, device="auto"):
-    """
-    Load model đã huấn luyện từ models/, đánh giá trên tập test.
+    """Load trained model and evaluate on the test set.
 
-    Các bước:
-    1. load dataset test
-    2. load state_dict từ models/<model_name>_best.pth
-    3. predict trên test set
-    4. Tính metrics: accuracy, precision, recall, F1 (overall + per-class)
-    5. Vẽ confusion matrix -> lưu vào results/plots/
-    6. Lưu bảng metrics -> results/metrics/<model_name>_evaluation.json
+    Saves metrics JSON and confusion matrix plot under results/.
     """
     image_size = {
         "M1": IMG_SIZE_M1,
@@ -46,7 +41,7 @@ def evaluate(model_name, checkpoint_path=None, device="auto"):
     }[model_name]
     checkpoint = Path(checkpoint_path or Path(MODELS_DIR) / f"{model_name}_best.pth")
     if not checkpoint.is_file():
-        raise FileNotFoundError(f"Không tìm thấy checkpoint: {checkpoint}")
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint}")
 
     device = get_device(device)
     model = build_model(model_name).to(device)
@@ -123,7 +118,7 @@ def main():
         type=str,
         default="auto",
         choices=["auto", "cpu", "cuda", "xpu"],
-        help="Thiết bị tính toán; auto ưu tiên CUDA, sau đó XPU, cuối cùng CPU.",
+        help="Compute device; auto prefers CUDA, then XPU, then CPU.",
     )
     args = parser.parse_args()
     metrics = evaluate(args.model, device=args.device)

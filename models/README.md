@@ -1,9 +1,9 @@
-# Models Directory (Output)
+# Models Directory
 
-Lưu trữ các file trọng số (`.pth`) hoặc checkpoint của mô hình sau khi huấn luyện (PyTorch).
+Stores trained model weights (`.pth` checkpoints).
 
-## Lưu ý
+## Notes
 
-- Nội dung của folder này được bỏ qua bởi `.gitignore`.
-- Mỗi model được lưu với tên dạng: `<model_name>_best.pth`.
-- Checkpoint được chọn theo validation macro-F1 trước khi được đánh giá trên test set.
+- Gitignored
+- Saved as `<model_name>_best.pth`
+- Selected by best validation macro-F1

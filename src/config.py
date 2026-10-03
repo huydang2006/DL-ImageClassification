@@ -1,11 +1,9 @@
-"""Cấu hình chung cho dự án phân loại ảnh rau củ quả."""
+"""Project configuration."""
 
-# ---------------------------------------------------------------------------
-# Đường dẫn thư mục
-# ---------------------------------------------------------------------------
 import os
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # thư mục gốc (DL-ImageClassification)
+# Paths
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 RAW_DATA_DIR = os.path.join(DATA_DIR, "raw")
 PROCESSED_DATA_DIR = os.path.join(DATA_DIR, "processed")
@@ -13,21 +11,17 @@ SPLITS_DIR = os.path.join(DATA_DIR, "splits")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 RESULTS_DIR = os.path.join(BASE_DIR, "results")
 
-# ---------------------------------------------------------------------------
-# Tham số dữ liệu
-# ---------------------------------------------------------------------------
-NUM_CLASSES = 28          # 14 loại rau/củ × 2 trạng thái (Healthy/Rotten)
-IMG_SIZE_M1 = 128         # kích thước ảnh dùng cho M1 (Simple NN)
-IMG_SIZE_M2 = 128         # kích thước ảnh dùng cho M2 (Deep CNN)
-IMG_SIZE_M3 = 224         # kích thước ảnh dùng cho M3 (transfer learning)
+# Data parameters
+NUM_CLASSES = 28
+IMG_SIZE_M1 = 128
+IMG_SIZE_M2 = 128
+IMG_SIZE_M3 = 224
 BATCH_SIZE = 64
 SEED = 42
 
-# ---------------------------------------------------------------------------
-# Tham số huấn luyện (placeholder)
-# ---------------------------------------------------------------------------
-LEARNING_RATE = 1e-3       # placeholder — sẽ cấu hình chi tiết trong lúc train
-EPOCHS = 10             # placeholder
+# Training parameters
+LEARNING_RATE = 1e-3
+EPOCHS = 10
 M3_FREEZE_EPOCHS = 5
 M3_FINETUNE_EPOCHS = 5
 LR_SCHEDULER_PATIENCE = 3

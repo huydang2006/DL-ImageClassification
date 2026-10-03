@@ -39,7 +39,7 @@ def test_find_dataset_root_supports_nested_archive(tmp_path):
 def test_find_dataset_root_rejects_ambiguous_data(tmp_path):
     _make_dataset(tmp_path / "first")
     _make_dataset(tmp_path / "second")
-    with pytest.raises(ValueError, match="nhiều dataset"):
+    with pytest.raises(ValueError, match="multiple datasets"):
         find_dataset_root(tmp_path, expected_classes=2)
 
 
@@ -102,5 +102,5 @@ def test_prepare_dataset_is_reproducible(tmp_path):
 
 
 def test_invalid_ratios_fail_before_reading_data(tmp_path):
-    with pytest.raises(ValueError, match="Tỉ lệ"):
+    with pytest.raises(ValueError, match="ratio"):
         prepare_dataset(tmp_path / "missing", train_ratio=float("nan"))

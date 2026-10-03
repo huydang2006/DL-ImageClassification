@@ -14,7 +14,7 @@ def test_labels_mapping_matches_dataset():
 
 def test_download_skips_existing_dataset():
     message = download_dataset()
-    assert "bỏ qua tải xuống" in message
+    assert "skipping download" in message.lower()
 
 
 def test_validation_dataset_returns_tensor_and_label():

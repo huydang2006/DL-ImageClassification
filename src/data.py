@@ -1,4 +1,4 @@
-"""Tải dữ liệu, định nghĩa Dataset và tạo DataLoader cho PyTorch."""
+"""Data loading, Dataset definition, and DataLoader creation."""
 
 import shutil
 import subprocess
@@ -38,11 +38,8 @@ from src.preprocessing import (
 KAGGLE_DATASET = "muhammad0subhan/fruit-and-vegetable-disease-healthy-vs-rotten"
 
 
-# ---------------------------------------------------------------------------
-# Dataset download and split helpers
-# ---------------------------------------------------------------------------
 def _has_complete_dataset(raw_dir: Path) -> bool:
-    """Return whether raw_dir contains all expected non-empty class folders."""
+    """Check if raw_dir contains all expected class folders."""
     try:
         root = find_dataset_root(raw_dir)
     except (FileNotFoundError, ValueError):
@@ -51,29 +48,21 @@ def _has_complete_dataset(raw_dir: Path) -> bool:
 
 
 def _safe_extract(zip_path: Path, destination: Path) -> None:
-    """Extract a zip archive without allowing paths outside destination."""
+    """Extract zip archive safely."""
     destination = destination.resolve()
     with zipfile.ZipFile(zip_path) as archive:
         for member in archive.infolist():
             target = (destination / member.filename).resolve()
             if target != destination and destination not in target.parents:
-                raise RuntimeError(f"Archive chứa đường dẫn không an toàn: {member.filename}")
+                raise RuntimeError(f"Unsafe path in archive: {member.filename}")
         archive.extractall(destination)
 
 
 def download_dataset() -> str:
-    """
-    Tải dataset từ Kaggle sử dụng Kaggle API.
-
-    Dataset: Fruit and Vegetable Disease (Healthy vs Rotten)
-    URL: https://www.kaggle.com/datasets/muhammad0subhan/fruit-and-vegetable-disease-healthy-vs-rotten
-
-    Returns:
-        Mô tả hành động: dataset đã tồn tại hoặc đã tải xuống.
-    """
+    """Download dataset from Kaggle."""
     raw_dir = Path(RAW_DATA_DIR)
     if _has_complete_dataset(raw_dir):
-        return f"Dataset đã tồn tại tại {raw_dir}; bỏ qua tải xuống."
+        return f"Dataset already exists at {raw_dir}; skipping download."
 
     raw_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="kaggle-download-") as temp_dir:
@@ -93,20 +82,17 @@ def download_dataset() -> str:
             subprocess.run(command, check=True)
         except FileNotFoundError as exc:
             raise RuntimeError(
-                "Không tìm thấy Kaggle CLI. Hãy cài dependencies bằng "
+                "Kaggle CLI not found. Install dependencies with "
                 "'pip install -r requirements.txt'."
             ) from exc
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(
-                "Kaggle download thất bại. Hãy kiểm tra Kaggle API credentials "
-                "và quyền truy cập dataset."
+                "Kaggle download failed. Check Kaggle API credentials."
             ) from exc
 
         archives = list(download_dir.glob("*.zip"))
         if len(archives) != 1:
-            raise RuntimeError(
-                f"Kỳ vọng đúng một file zip từ Kaggle, nhận được {len(archives)}."
-            )
+            raise RuntimeError(f"Expected one zip file, found {len(archives)}.")
 
         extracted_dir = download_dir / "extracted"
         extracted_dir.mkdir()
@@ -119,9 +105,7 @@ def download_dataset() -> str:
             None,
         )
         if source_root is None:
-            raise RuntimeError(
-                "Dataset tải về không chứa đủ 28 thư mục class có ảnh hợp lệ."
-            )
+            raise RuntimeError("Downloaded dataset is incomplete.")
 
         source_root = find_dataset_root(source_root)
         for source in get_class_directories(source_root):
@@ -131,17 +115,12 @@ def download_dataset() -> str:
             shutil.move(str(source), str(destination))
 
     if not _has_complete_dataset(raw_dir):
-        raise RuntimeError("Dataset sau khi giải nén không hợp lệ.")
-    return f"Đã tải và giải nén dataset vào {raw_dir}."
+        raise RuntimeError("Extracted dataset is invalid.")
+    return f"Downloaded and extracted dataset to {raw_dir}."
 
 
 def get_labels_mapping() -> Dict[str, int]:
-    """
-    Trả về dict ánh xạ tên thư mục (class) -> số nguyên (label index).
-
-    Dataset gồm 28 thư mục con, mỗi thư mục tương ứng 1 lớp.
-    Ví dụ: {"Apple_healthy": 0, "Apple_rotten": 1, ...}
-    """
+    """Map class names to label indices."""
     return build_labels_mapping(RAW_DATA_DIR)
 
 
@@ -150,35 +129,16 @@ def split_dataset(
     val_ratio: float = 0.15,
     seed: int = SEED,
 ) -> Dict[str, str]:
-    """
-    Chia dataset thành train / val / test (70/15/15) theo stratified sampling
-    trên 28 lớp, lưu kết quả dưới dạng CSV vào SPLITS_DIR.
-
-    Returns:
-        Dict ánh xạ tên split ("train", "val", "test") tới đường dẫn CSV.
-    """
+    """Split dataset into train/val/test CSVs."""
     return prepare_dataset(
         RAW_DATA_DIR, SPLITS_DIR, train_ratio, val_ratio, seed
     )
 
 
-# ---------------------------------------------------------------------------
-# Dataset class
-# ---------------------------------------------------------------------------
 class FruitVegDataset(Dataset):
-    """
-    PyTorch Dataset class cho bài toán phân loại ảnh.
-
-    Loads a CSV split, decodes an image and returns a transformed tensor and label.
-    """
+    """PyTorch Dataset for fruit/veg disease classification."""
 
     def __init__(self, split_file: str, img_size: int, transform=None):
-        """
-        Args:
-            split_file: str, đường dẫn tới file CSV trong SPLITS_DIR.
-            img_size: int, kích thước ảnh resize (128 hoặc 224).
-            transform: torchvision.transforms.Compose (nếu có).
-        """
         self.transform = transform or get_evaluation_transform(
             img_size, convert_color=False
         )
@@ -186,14 +146,12 @@ class FruitVegDataset(Dataset):
         required_columns = {"filepath", "label", "class_name"}
         missing_columns = required_columns.difference(self.frame.columns)
         if missing_columns:
-            raise ValueError(
-                f"Split file thiếu các cột bắt buộc: {sorted(missing_columns)}"
-            )
+            raise ValueError(f"Missing columns in split file: {sorted(missing_columns)}")
         if self.frame.empty:
-            raise ValueError(f"Split file không có dữ liệu: {split_file}")
+            raise ValueError(f"Split file is empty: {split_file}")
         self.frame["label"] = self.frame["label"].astype(int)
         if not self.frame["label"].between(0, NUM_CLASSES - 1).all():
-            raise ValueError("Split file chứa label nằm ngoài khoảng hợp lệ.")
+            raise ValueError("Labels in split file are out of range.")
 
     def __len__(self) -> int:
         return len(self.frame)
@@ -202,47 +160,33 @@ class FruitVegDataset(Dataset):
         row = self.frame.iloc[idx]
         image_path = Path(BASE_DIR) / Path(row["filepath"])
         if not image_path.is_file():
-            raise FileNotFoundError(f"Không tìm thấy ảnh: {image_path}")
+            raise FileNotFoundError(f"Image not found: {image_path}")
         try:
             with Image.open(image_path) as image:
                 image = convert_rgb(image)
         except (OSError, ValueError) as exc:
-            raise RuntimeError(f"Không thể đọc ảnh: {image_path}") from exc
+            raise RuntimeError(f"Failed to read image: {image_path}") from exc
         return self.transform(image), int(row["label"])
 
 
-# ---------------------------------------------------------------------------
-# DataLoader
-# ---------------------------------------------------------------------------
 def build_dataloader(
     split_name: str,
     img_size: int,
     batch_size: int = BATCH_SIZE,
     pin_memory: bool = False,
 ) -> DataLoader:
-    """
-    Tạo DataLoader cho một split (train/val/test).
-
-    Args:
-        split_name: str, tên file CSV trong SPLITS_DIR (ví dụ: "train.csv").
-        img_size: int, kích thước ảnh.
-        batch_size: int.
-
-    Returns:
-        torch.utils.data.DataLoader
-    """
+    """Create DataLoader for a given split."""
     if split_name.endswith(".csv"):
         split_name = split_name[:-4]
     if split_name not in {"train", "val", "test"}:
-        raise ValueError("split_name phải là một trong: train, val, test.")
+        raise ValueError("split_name must be 'train', 'val', or 'test'.")
     if batch_size <= 0:
-        raise ValueError("batch_size phải lớn hơn 0.")
+        raise ValueError("batch_size must be positive.")
 
     split_file = Path(SPLITS_DIR) / f"{split_name}.csv"
     if not split_file.is_file():
-        raise FileNotFoundError(
-            f"Không tìm thấy split file: {split_file}. Hãy chạy split_dataset() trước."
-        )
+        raise FileNotFoundError(f"Split file not found: {split_file}. Run split_dataset() first.")
+
     transform = (
         get_training_transform(img_size, convert_color=False)
         if split_name == "train"
@@ -259,10 +203,10 @@ def build_dataloader(
 
 
 def get_class_weights(split_name: str = "train") -> torch.Tensor:
-    """Wrapper tương thích; phần tính trọng số nằm trong preprocessing."""
+    """Calculate class weights for balancing."""
     return calculate_class_weights(split_name, SPLITS_DIR)
 
 
 def find_cross_split_duplicates():
-    """Wrapper tương thích; phần kiểm tra leakage nằm trong preprocessing."""
+    """Check for data leakage between splits."""
     return inspect_cross_split_duplicates(SPLITS_DIR)

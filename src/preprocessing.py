@@ -1,8 +1,6 @@
-"""Tiền xử lý ảnh dựa trên kết quả phân tích trong ``notebooks/EDA.ipynb``.
+"""Image preprocessing: validation, splitting, transforms.
 
-Module này chịu trách nhiệm kiểm tra dữ liệu, chống rò rỉ do ảnh trùng, chia
-train/validation/test, tính trọng số lớp và định nghĩa transform ảnh. Ảnh gốc
-không bị chỉnh sửa; transform được áp dụng khi DataLoader đọc từng ảnh.
+Original images are never modified; transforms run when DataLoader reads.
 """
 
 import argparse
@@ -23,12 +21,12 @@ from src.config import BASE_DIR, NUM_CLASSES, RAW_DATA_DIR, SEED, SPLITS_DIR
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
-# Màu nền gần trung bình ImageNet, tránh tạo viền quá sáng hoặc quá tối.
+# Background close to ImageNet mean, avoiding bright/dark borders.
 PADDING_COLOR = (124, 116, 104)
 
 
 def get_class_directories(root):
-    """Liệt kê thư mục lớp, bỏ qua metadata và liên kết thư mục."""
+    """List class directories, skipping metadata and links."""
     return sorted(
         path for path in Path(root).iterdir()
         if path.is_dir()
@@ -40,18 +38,17 @@ def get_class_directories(root):
 
 
 def find_dataset_root(raw_dir=RAW_DATA_DIR, expected_classes=NUM_CLASSES):
-    """Tìm duy nhất một thư mục chứa đủ các lớp có ảnh được hỗ trợ.
+    """Find the unique directory containing all expected class folders.
 
-    Hỗ trợ dataset nằm trực tiếp trong ``raw_dir`` hoặc bên trong một hay nhiều
-    thư mục bao ngoài do file ZIP tạo ra. Nếu có nhiều dataset hoàn chỉnh, hàm
-    báo lỗi để tránh âm thầm chọn nhầm dữ liệu.
+    Handles datasets directly in raw_dir or nested in wrapper folders from ZIPs.
+    Raises if multiple complete datasets are found.
     """
     if (isinstance(expected_classes, bool) or not isinstance(expected_classes, int)
             or expected_classes <= 0):
-        raise ValueError("Số lớp kỳ vọng phải là số nguyên dương.")
+        raise ValueError("expected_classes must be a positive integer.")
     root = Path(raw_dir).resolve()
     if not root.is_dir():
-        raise FileNotFoundError(f"Thư mục dữ liệu không tồn tại: {root}")
+        raise FileNotFoundError(f"Data directory does not exist: {root}")
 
     candidates = []
     pending = [root]
@@ -68,25 +65,25 @@ def find_dataset_root(raw_dir=RAW_DATA_DIR, expected_classes=NUM_CLASSES):
             candidates.append(current)
         pending.extend(reversed(children))
 
-    # Chỉ giữ gốc sâu nhất nếu thư mục bao ngoài tình cờ cũng đủ số thư mục con.
+    # Keep only the deepest root in case wrappers also have enough subfolders.
     candidates = [
         candidate for candidate in candidates
         if not any(candidate in other.parents for other in candidates)
     ]
     if not candidates:
         raise ValueError(
-            f"Không tìm thấy dataset có đủ {expected_classes} lớp chứa ảnh trong {root}."
+            f"No dataset with {expected_classes} image-bearing classes found in {root}."
         )
     if len(candidates) > 1:
         raise ValueError(
-            "Tìm thấy nhiều dataset hoàn chỉnh; hãy chỉ định đúng thư mục: "
+            "Found multiple datasets; specify the correct directory: "
             + ", ".join(str(path) for path in candidates)
         )
     return candidates[0]
 
 
 def get_labels_mapping(raw_dir=RAW_DATA_DIR, expected_classes=NUM_CLASSES):
-    """Trả về ánh xạ tên lớp sang chỉ số theo thứ tự tên ổn định."""
+    """Map class names to label indices in stable sorted order."""
     root = find_dataset_root(raw_dir, expected_classes)
     return {
         class_dir.name: label
@@ -103,7 +100,7 @@ def _sha256(path):
 
 
 def convert_rgb(image):
-    """Chỉnh hướng EXIF, ghép alpha lên nền cố định và chuyển ảnh thành RGB."""
+    """Fix EXIF orientation, flatten alpha onto PADDING_COLOR, return RGB."""
     image = ImageOps.exif_transpose(image)
     if "A" in image.getbands() or "transparency" in image.info:
         rgba = image.convert("RGBA")
@@ -113,11 +110,11 @@ def convert_rgb(image):
 
 
 class ResizeWithPadding:
-    """Đưa toàn bộ ảnh vào khung vuông mà không kéo méo hoặc cắt đối tượng."""
+    """Fit the whole image into a square frame without distortion or cropping."""
 
     def __init__(self, image_size):
         if isinstance(image_size, bool) or not isinstance(image_size, int) or image_size <= 0:
-            raise ValueError("image_size phải là số nguyên dương.")
+            raise ValueError("image_size must be a positive integer.")
         self.image_size = image_size
 
     def __call__(self, image):
@@ -130,7 +127,7 @@ class ResizeWithPadding:
 
 
 def get_evaluation_transform(image_size, *, convert_color=True):
-    """Transform xác định cho validation/test."""
+    """Deterministic transform for validation/test."""
     operations = [convert_rgb] if convert_color else []
     return transforms.Compose(operations + [
         ResizeWithPadding(image_size),
@@ -140,7 +137,7 @@ def get_evaluation_transform(image_size, *, convert_color=True):
 
 
 def get_training_transform(image_size, *, convert_color=True):
-    """Transform train với augmentation nhẹ theo khuyến nghị từ EDA."""
+    """Training transform with light augmentation from EDA recommendations."""
     operations = [convert_rgb] if convert_color else []
     return transforms.Compose(operations + [
         ResizeWithPadding(image_size),
@@ -150,20 +147,20 @@ def get_training_transform(image_size, *, convert_color=True):
             interpolation=transforms.InterpolationMode.BILINEAR,
             fill=PADDING_COLOR,
         ),
-        # Không đổi hue vì màu là một tín hiệu liên quan tới độ tươi.
+        # No hue jitter: color is a freshness signal.
         transforms.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15),
         transforms.ToTensor(),
         transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
     ])
 
 
-# Tên cũ được giữ để code bên ngoài dự án không bị lỗi import.
+# Legacy aliases kept for backward compatibility.
 create_augmentation_pipeline = get_training_transform
 get_default_transform = get_evaluation_transform
 
 
 def scan_dataset(raw_dir=RAW_DATA_DIR, expected_classes=NUM_CLASSES):
-    """Giải mã và băm toàn bộ ảnh; trả về catalog hợp lệ và danh sách ảnh lỗi."""
+    """Decode and hash every image; return valid catalog and invalid list."""
     root = find_dataset_root(raw_dir, expected_classes)
     valid_records = []
     invalid_records = []
@@ -181,7 +178,7 @@ def scan_dataset(raw_dir=RAW_DATA_DIR, expected_classes=NUM_CLASSES):
             try:
                 with Image.open(path) as image:
                     image.verify()
-                # verify() không giải mã pixel nên mở lại và load đầy đủ.
+                # verify() does not decode pixels, so reopen and load fully.
                 with Image.open(path) as image:
                     image.load()
                     width, height = image.size
@@ -198,7 +195,7 @@ def scan_dataset(raw_dir=RAW_DATA_DIR, expected_classes=NUM_CLASSES):
                 })
             except (OSError, ValueError, Image.DecompressionBombError) as exc:
                 invalid_records.append({**common, "error": str(exc)})
-        print(f"Đã quét {class_dir.name}: {len(image_paths)} ảnh", flush=True)
+        print(f"Scanned {class_dir.name}: {len(image_paths)} images", flush=True)
 
     valid_columns = [
         "filepath", "label", "class_name", "width", "height", "aspect_ratio",
@@ -214,23 +211,23 @@ def scan_dataset(raw_dir=RAW_DATA_DIR, expected_classes=NUM_CLASSES):
 def prepare_dataset(raw_dir=RAW_DATA_DIR, output_dir=SPLITS_DIR,
                     train_ratio=0.7, val_ratio=0.15, seed=SEED,
                     expected_classes=NUM_CLASSES):
-    """Kiểm tra và chia dữ liệu theo nhóm SHA-256, sau đó lưu CSV và báo cáo."""
+    """Validate data, split by SHA-256 groups, save CSVs and report."""
     if (not all(math.isfinite(value) and value > 0 for value in (train_ratio, val_ratio))
             or train_ratio + val_ratio >= 1):
-        raise ValueError("Tỉ lệ train và validation phải dương, tổng nhỏ hơn một.")
+        raise ValueError("Train and validation ratios must be positive and sum to less than 1.")
 
     catalog, invalid = scan_dataset(raw_dir, expected_classes)
     if catalog.empty:
-        raise ValueError("Không tìm thấy ảnh hợp lệ trong dataset.")
+        raise ValueError("No valid images found in dataset.")
 
     label_counts_per_hash = catalog.groupby("content_hash")["label"].nunique()
     conflicting_hashes = set(label_counts_per_hash[label_counts_per_hash > 1].index)
     conflicting = catalog[catalog["content_hash"].isin(conflicting_hashes)].copy()
     clean = catalog[~catalog["content_hash"].isin(conflicting_hashes)].copy()
     if clean["label"].nunique() != expected_classes:
-        raise ValueError("Có lớp không còn ảnh hợp lệ sau bước kiểm tra dữ liệu.")
+        raise ValueError("Some classes have no valid images left after validation.")
 
-    # Một hash là một đơn vị chia để mọi bản sao giống hệt nằm cùng một split.
+    # One hash = one split unit so identical copies stay in the same split.
     groups = clean.drop_duplicates("content_hash")[["content_hash", "label"]]
     try:
         train_groups, remainder = train_test_split(
@@ -248,7 +245,7 @@ def prepare_dataset(raw_dir=RAW_DATA_DIR, output_dir=SPLITS_DIR,
         )
     except ValueError as exc:
         raise ValueError(
-            "Không đủ nhóm ảnh độc lập trong mỗi lớp cho tỉ lệ chia đã chọn."
+            "Not enough independent image groups per class for the requested ratios."
         ) from exc
 
     group_sets = {
@@ -261,7 +258,7 @@ def prepare_dataset(raw_dir=RAW_DATA_DIR, output_dir=SPLITS_DIR,
         for name, hashes in group_sets.items()
     }
     if any(frame["label"].nunique() != expected_classes for frame in split_frames.values()):
-        raise ValueError("Mỗi split phải chứa đủ các lớp.")
+        raise ValueError("Each split must contain all classes.")
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -309,7 +306,7 @@ def prepare_dataset(raw_dir=RAW_DATA_DIR, output_dir=SPLITS_DIR,
             for column in ("width", "height")
         },
         "duplicate_policy": (
-            "Ảnh giống hệt theo SHA-256 nằm cùng split; ảnh cùng hash khác nhãn bị loại."
+            "SHA-256 identical images stay in one split; same-hash different-label images excluded."
         ),
     }
     (output_dir / "preprocessing_report.json").write_text(
@@ -320,20 +317,20 @@ def prepare_dataset(raw_dir=RAW_DATA_DIR, output_dir=SPLITS_DIR,
 
 def get_class_weights(split_name="train", split_dir=SPLITS_DIR,
                       expected_classes=NUM_CLASSES):
-    """Tính trọng số nghịch đảo tần suất chỉ từ split được yêu cầu."""
+    """Inverse-frequency weights from the requested split only."""
     path = Path(split_dir) / f"{split_name.removesuffix('.csv')}.csv"
     if not path.is_file():
-        raise FileNotFoundError(f"Không tìm thấy split: {path}")
+        raise FileNotFoundError(f"Split file not found: {path}")
     frame = pd.read_csv(path)
     counts = frame["label"].value_counts().reindex(range(expected_classes), fill_value=0)
     if (counts == 0).any():
-        raise ValueError("Split phải chứa ít nhất một ảnh của mỗi lớp.")
+        raise ValueError("Each split must contain at least one image per class.")
     weights = len(frame) / (expected_classes * counts.astype(float))
     return torch.tensor(weights.to_numpy(), dtype=torch.float32)
 
 
 def find_cross_split_duplicates(split_dir=SPLITS_DIR):
-    """Trả về các SHA-256 xuất hiện trong nhiều split."""
+    """Return SHA-256 hashes that appear in more than one split."""
     locations = {}
     for split_name in ("train", "val", "test"):
         frame = pd.read_csv(Path(split_dir) / f"{split_name}.csv")
