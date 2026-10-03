@@ -14,9 +14,6 @@ from sklearn.metrics import f1_score
 
 from src.config import (
     NUM_CLASSES,
-    IMG_SIZE_M1,
-    IMG_SIZE_M2,
-    IMG_SIZE_M3,
     BATCH_SIZE,
     LEARNING_RATE,
     EPOCHS,
@@ -28,6 +25,8 @@ from src.config import (
     MODELS_DIR,
     RESULTS_DIR,
     SPLITS_DIR,
+    MODEL_CHOICES,
+    get_model_image_size,
 )
 from src.data import build_dataloader
 from src.preprocessing import get_class_weights, prepare_dataset
@@ -72,11 +71,7 @@ def train(model_name: str, epochs: int, batch_size: int, lr: float, device="auto
     if not all((split_dir / f"{name}.csv").is_file() for name in ("train", "val")):
         prepare_dataset()
 
-    image_size = {
-        "M1": IMG_SIZE_M1,
-        "M2": IMG_SIZE_M2,
-        "M3": IMG_SIZE_M3,
-    }[model_name]
+    image_size = get_model_image_size(model_name)
     device = get_device(device)
     pin_memory = device.type in {"cuda", "xpu"}
     train_loader = build_dataloader("train", image_size, batch_size, pin_memory)
@@ -200,7 +195,7 @@ def main():
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Train fruit and vegetable image classifier")
-    parser.add_argument("--model", type=str, default="M1", choices=["M1", "M2", "M3"])
+    parser.add_argument("--model", type=str, default="M1", choices=MODEL_CHOICES)
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch_size", type=int, default=None)
     parser.add_argument("--lr", type=float, default=None)

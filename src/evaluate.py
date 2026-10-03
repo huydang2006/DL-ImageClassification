@@ -17,12 +17,11 @@ from sklearn.metrics import (
 )
 
 from src.config import (
-    IMG_SIZE_M1,
-    IMG_SIZE_M2,
-    IMG_SIZE_M3,
     MODELS_DIR,
     NUM_CLASSES,
     RESULTS_DIR,
+    MODEL_CHOICES,
+    get_model_image_size,
 )
 from src.data import build_dataloader, get_labels_mapping
 from src.train import build_model
@@ -34,11 +33,7 @@ def evaluate(model_name, checkpoint_path=None, device="auto"):
 
     Saves metrics JSON and confusion matrix plot under results/.
     """
-    image_size = {
-        "M1": IMG_SIZE_M1,
-        "M2": IMG_SIZE_M2,
-        "M3": IMG_SIZE_M3,
-    }[model_name]
+    image_size = get_model_image_size(model_name)
     checkpoint = Path(checkpoint_path or Path(MODELS_DIR) / f"{model_name}_best.pth")
     if not checkpoint.is_file():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint}")
@@ -112,7 +107,7 @@ def main():
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Evaluate fruit and vegetable classifier")
-    parser.add_argument("--model", type=str, default="M1", choices=["M1", "M2", "M3"])
+    parser.add_argument("--model", type=str, default="M1", choices=MODEL_CHOICES)
     parser.add_argument(
         "--device",
         type=str,
