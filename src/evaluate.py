@@ -28,6 +28,58 @@ from src.train import build_model
 from src.utils import get_device, save_metrics
 
 
+def write_markdown_report(metrics, filepath):
+    """Write overall and per-class metrics as Markdown."""
+    report = metrics["classification_report"]
+    lines = [
+        f"# {metrics['model']} evaluation report",
+        "",
+        f"- Checkpoint: `{metrics['checkpoint']}`",
+        f"- Device: `{metrics['device']}`",
+        "",
+        "## Overall metrics",
+        "",
+        "| Metric | Value |",
+        "|---|---:|",
+        f"| Accuracy | {metrics['accuracy']:.4f} |",
+        f"| Macro precision | {metrics['macro_precision']:.4f} |",
+        f"| Macro recall | {metrics['macro_recall']:.4f} |",
+        f"| Macro F1 | {metrics['macro_f1']:.4f} |",
+        "",
+        "## Metrics by label",
+        "",
+        "| Label | Precision | Recall | F1 | Support |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for label, values in report.items():
+        if label in {"accuracy", "macro avg", "weighted avg"}:
+            continue
+        lines.append(
+            f"| {label} | {values['precision']:.4f} | "
+            f"{values['recall']:.4f} | {values['f1-score']:.4f} | "
+            f"{int(values['support'])} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Aggregate averages",
+            "",
+            "| Average | Precision | Recall | F1 | Support |",
+            "|---|---:|---:|---:|---:|",
+        ]
+    )
+    for label in ("macro avg", "weighted avg"):
+        values = report[label]
+        lines.append(
+            f"| {label} | {values['precision']:.4f} | "
+            f"{values['recall']:.4f} | {values['f1-score']:.4f} | "
+            f"{int(values['support'])} |"
+        )
+    output = Path(filepath)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def evaluate(model_name, checkpoint_path=None, device="auto"):
     """Load trained model and evaluate on the test set.
 
@@ -87,6 +139,8 @@ def evaluate(model_name, checkpoint_path=None, device="auto"):
     }
     metrics_path = Path(RESULTS_DIR) / "metrics" / f"{model_name}_evaluation.json"
     save_metrics(metrics, str(metrics_path))
+    report_path = Path(RESULTS_DIR) / "reports" / f"{model_name}_evaluation.md"
+    write_markdown_report(metrics, report_path)
 
     matrix = confusion_matrix(y_true, y_pred, labels=list(range(NUM_CLASSES)))
     plots_dir = Path(RESULTS_DIR) / "plots"
@@ -127,6 +181,7 @@ def main():
         "Metrics: "
         f"{Path(RESULTS_DIR) / 'metrics' / f'{args.model}_evaluation.json'}"
     )
+    print(f"Report: {Path(RESULTS_DIR) / 'reports' / f'{args.model}_evaluation.md'}")
     print(
         "Confusion matrix: "
         f"{Path(RESULTS_DIR) / 'plots' / f'{args.model}_confusion_matrix.png'}"
