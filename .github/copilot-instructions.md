@@ -5,8 +5,8 @@
 This repository compares three PyTorch classifiers for a 28-class fruit and
 vegetable freshness dataset (`<produce>__Healthy` and `<produce>__Rotten`):
 
-- **M1** (`src/models/simple_nn.py`) is a fully connected baseline using
-  `128 x 128` RGB images.
+- **M1** (`src/models/simple_nn.py`) is a simple CNN with two convolution and
+  pooling blocks using `128 x 128` RGB images.
 - **M2** (`src/models/cnn.py`) is a convolutional model using `128 x 128`
   images, three convolution/pooling blocks, adaptive average pooling, and a
   dropout classifier.

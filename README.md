@@ -19,7 +19,7 @@ This project builds and evaluates Deep Learning models to classify fruit and veg
 
 | Model | Description |
 | --- | --- |
-| **M1** | Simple NN (baseline) - Flattened image features |
+| **M1** | Simple CNN - Two convolution/pooling blocks and a fully connected classifier |
 | **M2** | Deep CNN - Multiple conv/pool/regularization blocks |
 | **M3** | Transfer Learning (MobileNetV2) - 5 epochs frozen, 5 epochs fine-tuned |
 
@@ -80,7 +80,7 @@ python -m src.preprocessing
 ### Train
 
 ```bash
-python -m src.train --model M1   # Simple NN
+python -m src.train --model M1   # Simple CNN
 python -m src.train --model M2   # Deep CNN
 python -m src.train --model M3   # Transfer Learning
 

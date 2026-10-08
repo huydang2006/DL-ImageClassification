@@ -1,6 +1,6 @@
 import torch
 
-from src.models import SimpleNN
+from src.models import SimpleCNN
 import pytest
 
 from src.utils import get_device, load_model, save_model, set_seed
@@ -24,9 +24,9 @@ def test_get_device_rejects_unknown_device():
 
 
 def test_model_checkpoint_roundtrip(tmp_path):
-    model = SimpleNN()
+    model = SimpleCNN()
     checkpoint = tmp_path / "model.pth"
     save_model(model, str(checkpoint))
-    loaded = load_model(SimpleNN, str(checkpoint))
+    loaded = load_model(SimpleCNN, str(checkpoint))
     for expected, actual in zip(model.parameters(), loaded.parameters()):
         assert torch.equal(expected, actual)

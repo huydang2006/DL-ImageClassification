@@ -36,8 +36,8 @@ from src.utils import get_device, save_metrics, save_model, set_seed
 def build_model(model_name: str, pretrained: bool = False) -> nn.Module:
     """Initialize model by name."""
     if model_name == "M1":
-        from src.models.simple_nn import SimpleNN
-        return SimpleNN()
+        from src.models.simple_nn import SimpleCNN
+        return SimpleCNN()
     elif model_name == "M2":
         from src.models.cnn import DeepCNN
         return DeepCNN()

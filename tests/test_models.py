@@ -1,10 +1,10 @@
 import torch
 
-from src.models import DeepCNN, SimpleNN, TransferModel
+from src.models import DeepCNN, SimpleCNN, TransferModel
 
 
-def test_simple_nn_output_shape():
-    output = SimpleNN()(torch.randn(2, 3, 128, 128))
+def test_simple_cnn_output_shape():
+    output = SimpleCNN()(torch.randn(2, 3, 128, 128))
     assert output.shape == (2, 28)
 
 

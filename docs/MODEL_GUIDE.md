@@ -39,56 +39,38 @@ weight(class) = number_of_training_images /
                 (number_of_classes * images_in_class)
 ```
 
-## 2. M1: Simple fully connected neural network
+## 2. M1: Simple convolutional neural network
 
 ### Purpose
 
-M1 is the baseline. It tests how well a standard multilayer perceptron can
-classify images when the two-dimensional spatial structure is discarded.
+M1 is the simple CNN baseline. It uses convolution and pooling to learn local
+image features before a fully connected classification layer.
 
 ### Input
 
 Images are resized to `128 x 128` pixels with 3 RGB channels.
 
 ```text
-Input shape:  (batch, 3, 128, 128)
-Flattened:    (batch, 49,152)
+Input shape: (batch, 3, 128, 128)
 ```
-
-The flattened vector contains all red, green, and blue values one after
-another. A dense layer does not know that neighboring pixels are neighbors.
 
 ### Architecture
 
 | Stage | Operation | Output shape |
 |---|---|---:|
-| 1 | Flatten | `(batch, 49,152)` |
-| 2 | Linear `49,152 -> 256` | `(batch, 256)` |
-| 3 | ReLU | `(batch, 256)` |
-| 4 | Dropout `p=0.3` during training | `(batch, 256)` |
-| 5 | Linear `256 -> 128` | `(batch, 128)` |
-| 6 | ReLU | `(batch, 128)` |
-| 7 | Dropout `p=0.3` during training | `(batch, 128)` |
-| 8 | Linear `128 -> 28` | `(batch, 28)` |
+| 1 | Conv `3 -> 16`, kernel `3x3`, padding 1; ReLU; MaxPool `2x2` | `(batch, 16, 64, 64)` |
+| 2 | Conv `16 -> 32`, kernel `3x3`, padding 1; ReLU; MaxPool `2x2` | `(batch, 32, 32, 32)` |
+| 3 | Adaptive average pooling to `1x1` | `(batch, 32, 1, 1)` |
+| 4 | Flatten; Linear `32 -> 28` | `(batch, 28)` |
 
 The final 28 values are logits. They are not probabilities until passed
 through softmax, which is handled internally by cross-entropy loss.
 
-### Forward pass
-
-For a dense layer:
-
-```text
-z = xW + b
-```
-
-ReLU is:
-
-```text
-ReLU(z) = max(0, z)
-```
-
-The final logits are converted to class probabilities conceptually by:
+The convolution layers learn local patterns such as edges, colors, and
+texture. Pooling reduces spatial resolution, and adaptive pooling produces a
+compact feature vector for the classifier. The final values are logits. They
+are not probabilities until passed through softmax, which is handled
+internally by cross-entropy loss.
 
 ```text
 softmax(z_i) = exp(z_i) / sum(exp(z_j))
@@ -96,21 +78,9 @@ softmax(z_i) = exp(z_i) / sum(exp(z_j))
 
 ### Why M1 is useful
 
-- Simple baseline for comparison.
-- Fast to understand and implement.
-- Shows the cost of ignoring image locality.
-
-### Main weakness
-
-The first layer alone has approximately 12.6 million weights:
-
-```text
-49,152 * 256 + 256 = 12,583,168 parameters
-```
-
-This is large for a baseline and does not exploit repeated visual patterns.
-For example, the same edge detector would need to be learned separately at
-many pixel locations.
+- Meets the simple CNN requirement with a small architecture.
+- Provides a clear baseline for comparison with M2 and M3.
+- Uses fewer layers and parameters than the deeper CNN.
 
 ## 3. M2: Deep convolutional neural network
 
@@ -302,9 +272,9 @@ classes. Off-diagonal cells identify specific weaknesses.
 
 | Property | M1 | M2 | M3 |
 |---|---|---|---|
-| Core idea | Dense baseline | Learned spatial features | Reuse pretrained features |
+| Core idea | Simple convolutional features | Learned spatial features | Reuse pretrained features |
 | Initialization | Random | Random | Pretrained backbone + new head |
-| Spatial awareness | No | Yes | Yes |
-| Training cost | High parameter count | Moderate | Higher setup, usually efficient convergence |
+| Spatial awareness | Yes | Yes | Yes |
+| Training cost | Low | Moderate | Higher setup, usually efficient convergence |
 | Expected performance | Lowest baseline | Better than M1 | Usually highest |
-| Main teaching point | Dense classification baseline | CNN feature extraction | Transfer learning and fine-tuning |
+| Main teaching point | Basic CNN feature extraction | Deeper CNN feature extraction | Transfer learning and fine-tuning |
